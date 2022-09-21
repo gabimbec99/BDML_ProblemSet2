@@ -86,32 +86,52 @@ ggplot(train_personas, aes(x=Estrato1, y=)) + geom_jitter()
 
 summary(X_pobre_hogares$Pobre)
 
-# seleccion de variables. 
+# Emparejamiento de la base de entrenamiento y prueba
+
+#Paquetes de instalación
+install.packages("pacman")
+require("pacman")
+p_load(tidyverse,knitr,kableExtra,here,jtools,ggstance,broom,broom.mixed,skimr)
+
+install.packages("ggplot2")
+
+install.packages("vctrs", type = "binary", dependencies = TRUE, repos = "https://cloud.r-project.org")
+
+install.packages("ggplot2",
+                 type = "binary",
+                 dependencies = TRUE,
+                 repos = "https://cloud.r-project.org")
+
+install.packages("caret")
+load("recipes")
+
+library("caret")
+
+#Selección de variables
+lambda <- 10^seq(-2, 3, length = 100)
+lasso <- train(
+  Fertility ~., data = X_pobre_hogares, method = "glmnet",
+  trControl = trainControl("cv", number = 10),
+  tuneGrid = expand.grid(alpha = 1, lambda=lambda), preProcess = c("center", "scale"),
+  family="binomial"
+)
+lasso
 
 
-# identificar la variable objetivo: 
-# es pobreza e ingpcug 
-# seleccionar variables. 
+
+ridge <- train(
+  Fertility ~., data = X_pobre_hogares, method = "glmnet",
+  trControl = trainControl("cv", number = 10),
+  tuneGrid = expand.grid(alpha = 0, lambda=lambda), preProcess = c("center", "scale"),
+  family="binomial"
+)
+ridge
 
 
+d_logit <- glm(D ~ ., 
+               # link puede ser probit o logit
+               family = binomial(link = "logit"),  
+               
+               data = X_pobre_hogares) 
 
-# hacer la seleccion de vaiables: 
-
-
-
-
-
-
-
-# elegir las variables de personas que hay en el test. 
-colnames_personas_test <- colnames(test_personas) 
-print(colnames_personas_test)
-
-# obtener la pobreza 
-sum_ingresos<-train_personas %>% group_by(id) %>% summarize(Ingtot_hogar=sum(Ingtot,na.rm = TRUE)) 
-
-
-# seleccionar las variables del datafame
-X= train_personas[,colnames_personas_test]
-
-train_hogares$Pobre
+tidy(d_logit)
