@@ -86,6 +86,7 @@ ggplot(train_personas, aes(x=Estrato1, y=)) + geom_jitter()
 
 summary(X_pobre_hogares$Pobre)
 
+
 # Emparejamiento de la base de entrenamiento y prueba
 
 #Paquetes de instalación
@@ -103,35 +104,113 @@ install.packages("ggplot2",
                  repos = "https://cloud.r-project.org")
 
 install.packages("caret")
-load("recipes")
-
 library("caret")
 
+
 #Selección de variables
-lambda <- 10^seq(-2, 3, length = 100)
-lasso <- train(
-  Fertility ~., data = X_pobre_hogares, method = "glmnet",
-  trControl = trainControl("cv", number = 10),
-  tuneGrid = expand.grid(alpha = 1, lambda=lambda), preProcess = c("center", "scale"),
-  family="binomial"
-)
-lasso
+skim(X_pobre_hogares)
+#Cambiar variables a categóricas
+X_pobre_hogares <- X_pobre_hogares[, !names(X_pobre_hogares) %in% c("Clase","Dominio","Fex_c","Fex_dpto")]
+test_hogares <- test_hogares[, !names(test_hogares) %in% c("Clase","Dominio","Fex_c","Fex_dpto")]
+
+X_pobre_hogares[, "Depto"] <- as.factor(X_pobre_hogares[, "Depto", drop = T])
 
 
+X_pobre_hogares <- data.frame(X_pobre_hogares[, !names(X_pobre_hogares) %in% "Depto"],model.matrix(~ Depto-1,X_pobre_hogares))
 
-ridge <- train(
-  Fertility ~., data = X_pobre_hogares, method = "glmnet",
-  trControl = trainControl("cv", number = 10),
-  tuneGrid = expand.grid(alpha = 0, lambda=lambda), preProcess = c("center", "scale"),
-  family="binomial"
-)
-ridge
+test_hogares[, "Depto"] <- as.factor(test_hogares[, "Depto", drop = T])
 
 
+test_hogares <- data.frame(test_hogares[, !names(test_hogares) %in% "Depto"],model.matrix(~ Depto-1,test_hogares))
+
+
+# quitando los na 
+sum(is.na(X_pobre_hogares$Pobre))
+
+colSums(is.na(X_pobre_hogares))
+
+## quitar las varuabes que estorban 
+
+X_pobre_hogares <- X_pobre_hogares[, !names(X_pobre_hogares) %in% c("P5100","P5130","P5140")]
+test_hogares <- test_hogares[, !names(test_hogares) %in% c("P5100","P5130","P5140")]
+
+X_pobre_hogares$D <- 1
+test_hogares$D <- 0
+
+install.packages("plyr")
+library("plyr")
+
+data_hogares <- rbind.fill(X_pobre_hogares,test_hogares)
+
+data_hogares <- data_hogares[, !names(data_hogares) %in% c("Pobre","Depto11")]
+
+rm(test_hogares,train_hogares,X_pobre_hogares ,pobre,pobre_hogares,test_personas,train_personas,X_hogares,X_ingreso_hogares,X_personas)
+#Soporte común
 d_logit <- glm(D ~ ., 
-               # link puede ser probit o logit
                family = binomial(link = "logit"),  
-               
-               data = X_pobre_hogares) 
+               data = data_hogares, na.action=na.exclude) 
 
 tidy(d_logit)
+
+
+datos_pscore %>% 
+  ggplot(aes(x = pscore, color = D)) +
+  geom_density() +
+  labs(x = "Probabilidad de pertencer a train",
+       y = "Densidad") +
+  scale_color_discrete(name = element_blank(), 
+                       labels = c("Train", "Test")) +
+  theme_bw() +
+  theme(legend.position = "bottom")
+
+
+##Ya contamos con probabilidades predichas de la participación al programa. Estas serán nuestro insumo para la identificar a los “clones”.
+
+### Definición del Soporte Común
+##La idea del soporte común es poder contar, para cada probabilidad, con casos de participantes y de no participantes. Esto nos permitirá descartar a quienes no podrán emparejarse. 
+
+
+
+datos_pscore %>% 
+  group_by(D) %>% 
+  summarise(min_pscore = min(pscore),
+            max_pscore = max(pscore)
+  ) %>% distinct(D, min_pscore, max_pscore)
+min_T <- datos_pscore[which(datos_pscore$D), "pscore"] %>% min()
+max_C <- datos_pscore[which(!datos_pscore$D),"pscore"] %>% max()
+
+
+
+n_datos_pscore <- datos_pscore %>% 
+  filter(D & pscore <= max_C | !D & pscore >= min_T)
+
+
+##Esto resulta en un pequeño cambio
+
+count(datos_pscore, D) %>% mutate(datos = "antes") %>% 
+  bind_rows(count(n_datos_pscore, D) %>% mutate(datos = "después")) %>% 
+  pivot_wider(names_from = "D", values_from = "n")
+
+
+
+
+
+#Regularización
+lambda <- 10^seq(-2, 3, length = 100)
+lasso <- train(
+  Pobre ~ . ,  data = X_pobre_hogares, method = "glmnet",
+  trControl = trainControl("cv", number = 10),
+  tuneGrid = expand.grid(alpha = 1, lambda=lambda), preProcess = c("center", "scale"))
+lasso
+
+#Prueba que funciona
+data(swiss) 
+set.seed(123) #set the seed for replication purposes
+str(swiss) 
+
+ridge <- train(
+  Fertility ~., data = swiss, method = "glmnet",
+  trControl = trainControl("cv", number = 10),
+  tuneGrid = expand.grid(alpha = 0, lambda=lambda), preProcess = c("center", "scale")
+)
+ridge
