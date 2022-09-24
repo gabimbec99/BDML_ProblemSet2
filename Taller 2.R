@@ -1,3 +1,19 @@
+## sancocho de paquetes 
+
+# create notin operator
+`%notin%` <- Negate(`%in%`)
+
+# Download packages if not available
+pckgs <- c("tidyverse", "data.table", "rlang", "readxl")
+if (any(pckgs %notin% rownames(installed.packages())==TRUE)){
+  install.packages(pckgs, repos = c(CRAN = "http://cloud.r-project.org"))}
+
+# load packages
+invisible(sapply(pckgs, FUN = require, character.only = TRUE))
+
+#### estos son para otras cosas 
+
+
 install.packages("installr")
 library(installr)
 updateR()
@@ -5,31 +21,210 @@ updateR()
 install.packages("tidyverse")
 install.packages("here")
 install.packages("dplyr")
+install.packages("readxl")
 
-library("here")
+library(readxl)
+library(dplyr)  
+library(here)
+library(tidyr)
 
-remove.packages(c("ggplot2", "lifecycle"))
+
+remove.packages(c("ggplot2", "lifecycle", "rlang"))
 install.packages('Rcpp', dependencies = TRUE)
 install.packages('ggplot2', dependencies = TRUE)
 install.packages('lifecycle', dependencies = TRUE)
+install.packages('rlang', dependencies = TRUE)
 
 
-train_hogares<-readRDS(here("C:/Users/mrozo/OneDrive - Universidad de los Andes/Maestría/Big Data/data/train_hogares.Rds"))
-train_personas<-readRDS(here("C:/Users/mrozo/OneDrive - Universidad de los Andes/Maestría/Big Data/data/train_personas.Rds"))
 
-test_hogares<-readRDS(here("C:/Users/mrozo/OneDrive - Universidad de los Andes/Maestría/Big Data/data/test_hogares.Rds"))
-test_personas<-readRDS(here("C:/Users/mrozo/OneDrive - Universidad de los Andes/Maestría/Big Data/data/test_personas.Rds"))
+#Paquetes de instalación
+install.packages("pacman")
+require("pacman")
+p_load(tidyverse,knitr,kableExtra,here,jtools,ggstance,broom,broom.mixed,skimr)
 
-# extraer las varaibles que tengo en train y test: 
+install.packages("ggplot2")
 
-# merge pobreza a toda la base de train 
+install.packages("vctrs", type = "binary", dependencies = TRUE, repos = "https://cloud.r-project.org")
 
-colnames_personas_test <- colnames(test_personas)
-X_personas = train_personas[,colnames_personas_test]
+install.packages("ggplot2",
+                 type = "binary",
+                 dependencies = TRUE,
+                 repos = "https://cloud.r-project.org")
 
-pobre<-train_hogares$Pobre
-pobre <- as.data.frame(pobre)
-X_personas <- merge(x=train_personas, y=pobre, all=TRUE)
+install.packages("caret")
+library("caret")
+
+## leyendo los datos
+
+train_hogares<-readRDS(here("D:/noveno semestre/big data/BDML_ProblemSet2/data/train_hogares.Rds"))
+train_personas<-readRDS(here("D:/noveno semestre/big data/BDML_ProblemSet2/data/train_personas.Rds"))
+
+test_hogares<-readRDS(here("D:/noveno semestre/big data/BDML_ProblemSet2/data/test_hogares.Rds"))
+test_personas<-readRDS(here("D:/noveno semestre/big data/BDML_ProblemSet2/data/test_personas.Rds"))
+
+## creando el subset de las variables:
+
+colnames_hogares_test <- colnames(test_hogares) 
+pobre_hogares = train_hogares[,c("Pobre")]
+ingreso_hogares = train_hogares[,c("Ingpcug")]
+train_hogares = train_hogares[,colnames_hogares_test]
+train_hogares =cbind(train_hogares,ingreso_hogares,pobre_hogares)
+train_hogares= data.frame(train_hogares)
+
+### limpiar la de personas
+
+colnames_personas_test <- colnames(test_personas) 
+ingreso_personas = train_personas[,c("Ingtot")]
+train_personas= train_personas[,colnames_personas_test]
+train_personas=cbind(train_personas,ingreso_personas)
+train_personas= data.frame(train_personas)
+
+
+
+write.csv(test_personas, "D:/noveno semestre/big data/BDML_ProblemSet2/data/test_personas.csv", row.names= FALSE)
+write.csv(train_personas, "D:/noveno semestre/big data/BDML_ProblemSet2/data/train_personas.csv", row.names= FALSE)
+
+write.csv(train_hogares, "D:/noveno semestre/big data/BDML_ProblemSet2/data/train_hogares.csv", row.names= FALSE)
+write.csv(test_hogares, "D:/noveno semestre/big data/BDML_ProblemSet2/data/test_hogares.csv", row.names= FALSE)
+
+# extraer las varaibles que son relevantes para el objeto de estudio:
+# limpieza de las variables. 
+
+############# hay que cambiar que es haven ###############
+library(haven)
+
+train_personas = haven::as_factor(train_personas)
+
+# import the codebook 
+#key <- read_excel("D:/noveno semestre/big data/BDML_ProblemSet2/data/recode_vals.xlsx") %>%
+  #select(c("var_name"),contains("value")) 
+#
+#variables_cambio <- key[["var_name"]]
+
+
+## Functions
+
+## split and unlist character values (separated by commas) into a numeric vector with n elements
+
+#vulist <- function(x){suppressWarnings(as.numeric(unlist(strsplit(as.character(x), split = ",")))) }
+
+## split and unlist string (separated by commas) into a character vector with n elements
+
+#vlulist <- function(x){suppressWarnings(unlist(strsplit(as.character(x), split = ",")))}
+
+## Option 5: recode values function (deframe) 
+# (rlang, tibble, and dplyr)
+
+#recode_the_vals <- function(x){	
+  
+ # x_name <- quo_name(enquo(x))
+ # key.sub <- key %>% filter(var_name %in% x_name)
+#  label.keys <- tibble(values = vlulist(key.sub$values), labels = vlulist(key.sub$value.labels))
+#  recode(x, !!!(deframe(label.keys)))
+#}
+
+# recode values
+#train_personas %>% 
+  #mutate(across(.cols = variables_cambio, ~ recode_the_vals(.x)))
+
+
+
+# tras hacer la recodificacion se seleccionan las variables mas relevantes:
+X1=train_personas[,variables_cambio]
+X2= train_personas[,c("id","P6040","Orden","Clase","Dominio","P6040","P6430","P6800","P6870","Pet","Oc","Des","Ina", "Depto")]
+Ingtot= train_personas[,"Ingtot"]
+train_personas =cbind(Ingtot,X2,X1)
+train_personas= data.frame(train_personas)
+
+#### encontrando el numero de missings
+
+# ver los missing values 
+is.na(train_personas)
+colSums(is.na(train_personas))
+
+## reemplazar categoricas 
+
+variables_categoricas <- c("Depto", "Dominio")
+for (v in variables_categoricas) {
+  train_personas[, v] <- as.factor(train_personas[, v, drop = T])
+}
+
+train_personas <- train_personas %>% mutate_at(vars("Ingtot"), ~replace_na(.,0))
+
+
+
+asignar_no_col <- c("P6510", "P6545", "P6580", "P6590", "P6610","P7040","P7090","P7110", "P7495", "P7510S3", "P7510S5")
+variables_factor <- names(select_if(train_personas, is.factor))
+
+
+for (i in asignar_no_col) {
+  train_personas[,i] <- as.character(train_personas[,i])
+  train_personas[which(is.na(train_personas[,i])==TRUE),i] <- "No"
+  train_personas[,i] <- as.factor(as.numeric(train_personas[,i]))
+}
+
+train_personas<-as.data.frame(train_personas)
+
+
+train_personas_dummy =train_personas[,variables_factor]
+
+
+train_personas_dummy <- model.matrix(~. , train_personas_dummy) %>%
+  as.data.frame()
+
+X <- model.matrix(y ~ ., data = dat)
+
+
+# reemplazar el ingtot de na por 0. 
+
+train_personas <- train_personas %>% mutate_at(vars("Ingtot"), ~replace_na(.,0))
+
+train_personas <- data.frame(train_personas[, !names(train_personas) %in% "Depto"],model.matrix(~ Depto-1,train_personas))
+
+
+# Installing Packages
+install.packages("dplyr")
+install.packages("glmnet")
+install.packages("ggplot2")
+install.packages("caret")
+
+
+
+
+
+library(caret)
+
+## eliminar los valores con ingresos totales con na. supuesto, son 0
+
+train_personas <-train_personas %>% mutate_at(vars("Ingtot"), ~replace_na(.,0))
+
+# X and Y datasets
+X <- train_personas %>% 
+  select(Ingtot) %>% 
+  scale(center = TRUE, scale = FALSE) %>% 
+  as.matrix()
+
+Y <- train_personas %>% 
+  select(-Ingtot) %>%  as.matrix()
+
+# Model Building : Elastic Net Regression
+control <- trainControl(method = "repeatedcv",
+                        number = 5,
+                        repeats = 5,
+                        search = "random",
+                        verboseIter = TRUE)
+
+# Training ELastic Net Regression model
+elastic_model <- train(Ingtot ~ .,
+                       data = cbind(X, Y),
+                       method = "glmnet",
+                       preProcess = c("center", "scale"),
+                       tuneLength = 25,
+                       trControl = control, na.action = na.exclude)
+
+elastic_model
+
+plot(elastic_model, main = "Elastic Net Regression")
 
 
 
@@ -51,6 +246,8 @@ X_pobre_hogares= data.frame(X_pobre_hogares)
 # Estadisticas descriptivas
 install.packages("ggplot2")
 library(ggplot2)
+
+remotes::update_packages("ggplot2")
 
 #Histograma simple
 ggplot(X_ingreso_hogares, aes(x=ingreso_hogares)) +
@@ -107,8 +304,8 @@ install.packages("ggplot2",
                  repos = "https://cloud.r-project.org")
 
 remove.packages("rlang")
-
 install.packages("rlang")
+library(rlang)
 
 install.packages("caret")
 library("caret")
@@ -117,22 +314,14 @@ library("caret")
 #Selección de variables
 # Emparejamiento de la base de entrenamiento y prueba
 
-#Paquetes de instalación
-install.packages("pacman")
-require("pacman")
-p_load(tidyverse,knitr,kableExtra,here,jtools,ggstance,broom,broom.mixed,skimr)
 
-install.packages("ggplot2")
+############################## creando variables agregadas #####################
 
-install.packages("vctrs", type = "binary", dependencies = TRUE, repos = "https://cloud.r-project.org")
 
-install.packages("ggplot2",
-                 type = "binary",
-                 dependencies = TRUE,
-                 repos = "https://cloud.r-project.org")
+train_hogares$sum_ingresos<-train_personas %>% group_by(id) %>% summarize(Ingtot_hogar=sum(Ingtot,na.rm = TRUE)) 
 
-install.packages("caret")
-library("caret")
+
+
 
 gc()
 #Selección de variables
