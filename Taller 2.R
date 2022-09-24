@@ -1,3 +1,7 @@
+install.packages("installr")
+library(installr)
+updateR()
+
 install.packages("tidyverse")
 install.packages("here")
 install.packages("dplyr")
@@ -5,16 +9,16 @@ install.packages("dplyr")
 library("here")
 
 remove.packages(c("ggplot2", "lifecycle"))
-  install.packages('Rcpp', dependencies = TRUE)
-  install.packages('ggplot2', dependencies = TRUE)
-  install.packages('lifecycle', dependencies = TRUE)
+install.packages('Rcpp', dependencies = TRUE)
+install.packages('ggplot2', dependencies = TRUE)
+install.packages('lifecycle', dependencies = TRUE)
 
 
-train_hogares<-readRDS(here("C:/Users/danie/Documents/taller 2 BD/data/train_hogares.Rds"))
-train_personas<-readRDS(here("C:/Users/danie/Documents/taller 2 BD/data/train_personas.Rds"))
+train_hogares<-readRDS(here("C:/Users/mrozo/OneDrive - Universidad de los Andes/Maestría/Big Data/data/train_hogares.Rds"))
+train_personas<-readRDS(here("C:/Users/mrozo/OneDrive - Universidad de los Andes/Maestría/Big Data/data/train_personas.Rds"))
 
-test_hogares<-readRDS(here("C:/Users/danie/Documents/taller 2 BD/data/test_hogares.Rds"))
-test_personas<-readRDS(here("C:/Users/danie/Documents/taller 2 BD/data/test_personas.Rds"))
+test_hogares<-readRDS(here("C:/Users/mrozo/OneDrive - Universidad de los Andes/Maestría/Big Data/data/test_hogares.Rds"))
+test_personas<-readRDS(here("C:/Users/mrozo/OneDrive - Universidad de los Andes/Maestría/Big Data/data/test_personas.Rds"))
 
 # extraer las varaibles que tengo en train y test: 
 
@@ -86,7 +90,31 @@ ggplot(train_personas, aes(x=Estrato1, y=)) + geom_jitter()
 
 summary(X_pobre_hogares$Pobre)
 
+# Emparejamiento de la base de entrenamiento y prueba
 
+#Paquetes de instalación
+install.packages("pacman")
+require("pacman")
+p_load(tidyverse,knitr,kableExtra,here,jtools,ggstance,broom,broom.mixed,skimr)
+
+install.packages("ggplot2")
+
+install.packages("vctrs", type = "binary", dependencies = TRUE, repos = "https://cloud.r-project.org")
+
+install.packages("ggplot2",
+                 type = "binary",
+                 dependencies = TRUE,
+                 repos = "https://cloud.r-project.org")
+
+remove.packages("rlang")
+
+install.packages("rlang")
+
+install.packages("caret")
+library("caret")
+
+
+#Selección de variables
 # Emparejamiento de la base de entrenamiento y prueba
 
 #Paquetes de instalación
@@ -106,7 +134,7 @@ install.packages("ggplot2",
 install.packages("caret")
 library("caret")
 
-
+gc()
 #Selección de variables
 skim(X_pobre_hogares)
 #Cambiar variables a categóricas
@@ -146,8 +174,7 @@ data_hogares <- data_hogares[, !names(data_hogares) %in% c("Pobre","Depto11")]
 
 rm(test_hogares,train_hogares,X_pobre_hogares ,pobre,pobre_hogares,test_personas,train_personas,X_hogares,X_ingreso_hogares,X_personas)
 #Soporte común
-d_logit <- glm(D ~ ., 
-               family = binomial(link = "logit"),  
+d_lm <- lm(D ~ .,  
                data = data_hogares, na.action=na.exclude) 
 
 tidy(d_logit)
@@ -190,7 +217,6 @@ n_datos_pscore <- datos_pscore %>%
 count(datos_pscore, D) %>% mutate(datos = "antes") %>% 
   bind_rows(count(n_datos_pscore, D) %>% mutate(datos = "después")) %>% 
   pivot_wider(names_from = "D", values_from = "n")
-
 
 
 
