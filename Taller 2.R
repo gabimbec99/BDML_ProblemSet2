@@ -12,13 +12,6 @@ if (any(pckgs %notin% rownames(installed.packages())==TRUE)){
 invisible(sapply(pckgs, FUN = require, character.only = TRUE))
 
 #### estos son para otras cosas 
-
-
-install.packages("installr")
-library(installr)
-updateR()
-
-install.packages("tidyverse")
 install.packages("here")
 install.packages("dplyr")
 install.packages("readxl")
@@ -27,29 +20,6 @@ library(readxl)
 library(dplyr)  
 library(here)
 library(tidyr)
-
-
-remove.packages(c("ggplot2", "lifecycle", "rlang"))
-install.packages('Rcpp', dependencies = TRUE)
-install.packages('ggplot2', dependencies = TRUE)
-install.packages('lifecycle', dependencies = TRUE)
-install.packages('rlang', dependencies = TRUE)
-
-
-
-#Paquetes de instalación
-install.packages("pacman")
-require("pacman")
-p_load(tidyverse,knitr,kableExtra,here,jtools,ggstance,broom,broom.mixed,skimr)
-
-install.packages("ggplot2")
-
-install.packages("vctrs", type = "binary", dependencies = TRUE, repos = "https://cloud.r-project.org")
-
-install.packages("ggplot2",
-                 type = "binary",
-                 dependencies = TRUE,
-                 repos = "https://cloud.r-project.org")
 
 install.packages("caret")
 library("caret")
@@ -78,14 +48,6 @@ ingreso_personas = train_personas[,c("Ingtot")]
 train_personas= train_personas[,colnames_personas_test]
 train_personas=cbind(train_personas,ingreso_personas)
 train_personas= data.frame(train_personas)
-
-
-
-write.csv(test_personas, "D:/noveno semestre/big data/BDML_ProblemSet2/data/test_personas.csv", row.names= FALSE)
-write.csv(train_personas, "D:/noveno semestre/big data/BDML_ProblemSet2/data/train_personas.csv", row.names= FALSE)
-
-write.csv(train_hogares, "D:/noveno semestre/big data/BDML_ProblemSet2/data/train_hogares.csv", row.names= FALSE)
-write.csv(test_hogares, "D:/noveno semestre/big data/BDML_ProblemSet2/data/test_hogares.csv", row.names= FALSE)
 
 # extraer las varaibles que son relevantes para el objeto de estudio:
 # limpieza de las variables. 
@@ -131,7 +93,7 @@ variables_cambio <- key[["var_name"]]
 
 # tras hacer la recodificacion se seleccionan las variables mas relevantes:
 X1=train_personas[,variables_cambio]
-X2= train_personas[,c("id","P6040","Orden","Clase","Dominio","P6040","P6430","P6800","P6870","Pet","Oc","Des","Ina", "Depto")]
+X2= train_personas[,c("id","P6040","Orden","Clase","Depto","P6040","P6430","P6800","P6870","Pet","Oc","Des","Ina")]
 Ingtot= train_personas[,"Ingtot"]
 train_personas =cbind(Ingtot,X2,X1)
 train_personas= data.frame(train_personas)
@@ -144,12 +106,13 @@ colSums(is.na(train_personas))
 
 ## reemplazar categoricas 
 
-variables_categoricas <- c("Depto", "Dominio")
+variables_categoricas <- c("Depto")
 for (v in variables_categoricas) {
   train_personas[, v] <- as.factor(train_personas[, v, drop = T])
 }
 
 train_personas <- train_personas %>% mutate_at(vars("Ingtot"), ~replace_na(.,0))
+train_personas <- train_personas %>% mutate_at(vars("P6800"), ~replace_na(.,0))
 
 library(forcats)
 # reemplazando estas variables por no 
@@ -164,8 +127,6 @@ for (v in asignar_no_col) {
 }
 
 # reemplazando por no sabe
-asignar_no_sabe <- c("P6090", "P6920")
-
 
 train_personas$P6090 <- fct_explicit_na(train_personas$P6090, "No sabe, no informa")
 train_personas$Ina <- fct_explicit_na(train_personas$Ina, "No info")
@@ -174,16 +135,32 @@ train_personas$Des <- fct_explicit_na(train_personas$Des, "No info")
 train_personas$Pet <- fct_explicit_na(train_personas$Pet, "No Pet")
 train_personas$P6870 <- fct_explicit_na(train_personas$P6870, "No tamano")
 train_personas$P6430 <- fct_explicit_na(train_personas$P6430, "No evidencia")
+train_personas$P6210 <- fct_explicit_na(train_personas$P6210, "No sabe,no informa")
+train_personas$P6240 <- fct_explicit_na(train_personas$P6240, "Otra actividad")
+
 
 
 install.packages("tidytable")
 library(tidytable)
 
+save(train_personas, file="D:/noveno semestre/big data/BDML_ProblemSet2/data/train_hogares.RData")
 
-train_personas %>%
+
+variables_factor <- names(select_if(train_personas, is.factor))
+train_personas_dummy <- train_personas[,variables_factor]
+
+
+train_personas_dummy <- train_personas_dummy %>%
   get_dummies.()
 
+variables_numeric <- names(select_if(train_personas, is.numeric))
+variables_character <- names(select_if(train_personas, is.character))
 
+train_personas_id <- train_personas[,variables_character]
+train_personas_num <- train_personas[,variables_numeric]
+
+
+train_personas <- cbind(train_personas_id, train_personas_num, train_personas_dummy )
 
 
 # reemplazar el ingtot de na por 0. 
@@ -200,23 +177,25 @@ install.packages("ggplot2")
 install.packages("caret")
 
 
-
+rm(train_personas_num, train_personas_id, train_personas_dummy, X,Y,X1,X2,key)
+rm(Ingtot)
+rm(test_hogares, test_personas)
+rm(pobre_hogares, ingreso_hogares, ingreso_personas)
 
 
 library(caret)
 
-## eliminar los valores con ingresos totales con na. supuesto, son 0
-
-train_personas <-train_personas %>% mutate_at(vars("Ingtot"), ~replace_na(.,0))
-
 # X and Y datasets
-X <- train_personas %>% 
+Y <- train_personas %>% 
   select(Ingtot) %>% 
   scale(center = TRUE, scale = FALSE) %>% 
   as.matrix()
 
-Y <- train_personas %>% 
-  select(-Ingtot) %>%  as.matrix()
+X <- train_personas %>% 
+  select(-Ingtot)%>% 
+  select(-id) %>%  as.matrix()
+
+
 
 # Model Building : Elastic Net Regression
 control <- trainControl(method = "repeatedcv",
@@ -236,6 +215,7 @@ elastic_model <- train(Ingtot ~ .,
 elastic_model
 
 plot(elastic_model, main = "Elastic Net Regression")
+
 
 
 
@@ -374,8 +354,7 @@ data_hogares <- data_hogares[, !names(data_hogares) %in% c("Pobre","Depto11")]
 
 rm(test_hogares,train_hogares,X_pobre_hogares ,pobre,pobre_hogares,test_personas,train_personas,X_hogares,X_ingreso_hogares,X_personas)
 #Soporte común
-d_lm <- lm(D ~ .,  
-               data = data_hogares, na.action=na.exclude) 
+d_lm <- lm(Ingtot ~ P6040,data = train_personas, na.action=na.exclude) 
 
 tidy(d_logit)
 
@@ -424,7 +403,7 @@ count(datos_pscore, D) %>% mutate(datos = "antes") %>%
 #Regularización
 lambda <- 10^seq(-2, 3, length = 100)
 lasso <- train(
-  Pobre ~ . ,  data = X_pobre_hogares, method = "glmnet",
+  Ingtot ~ . ,  data = train_personas, method = "glmnet",
   trControl = trainControl("cv", number = 10),
   tuneGrid = expand.grid(alpha = 1, lambda=lambda), preProcess = c("center", "scale"))
 lasso
