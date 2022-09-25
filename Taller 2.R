@@ -96,10 +96,10 @@ library(haven)
 train_personas = haven::as_factor(train_personas)
 
 # import the codebook 
-#key <- read_excel("D:/noveno semestre/big data/BDML_ProblemSet2/data/recode_vals.xlsx") %>%
-  #select(c("var_name"),contains("value")) 
-#
-#variables_cambio <- key[["var_name"]]
+key <- read_excel("D:/noveno semestre/big data/BDML_ProblemSet2/data/recode_vals.xlsx") %>%
+  select(c("var_name"),contains("value")) 
+
+variables_cambio <- key[["var_name"]]
 
 
 ## Functions
@@ -151,28 +151,39 @@ for (v in variables_categoricas) {
 
 train_personas <- train_personas %>% mutate_at(vars("Ingtot"), ~replace_na(.,0))
 
+library(forcats)
+# reemplazando estas variables por no 
 
-
-asignar_no_col <- c("P6510", "P6545", "P6580", "P6590", "P6610","P7040","P7090","P7110", "P7495", "P7510S3", "P7510S5")
+asignar_no_col <- c("P6510", "P6545", "P6580", "P6590", "P6610","P7040","P7090","P7110", "P7495", "P7510s3", "P7510s5", "P6920")
 variables_factor <- names(select_if(train_personas, is.factor))
 
-
-for (i in asignar_no_col) {
-  train_personas[,i] <- as.character(train_personas[,i])
-  train_personas[which(is.na(train_personas[,i])==TRUE),i] <- "No"
-  train_personas[,i] <- as.factor(as.numeric(train_personas[,i]))
+for (v in asignar_no_col) {
+  print(class(v))
+  print(v)
+  train_personas[, v] <- fct_explicit_na(train_personas[, v], "No")
 }
 
-train_personas<-as.data.frame(train_personas)
+# reemplazando por no sabe
+asignar_no_sabe <- c("P6090", "P6920")
 
 
-train_personas_dummy =train_personas[,variables_factor]
+train_personas$P6090 <- fct_explicit_na(train_personas$P6090, "No sabe, no informa")
+train_personas$Ina <- fct_explicit_na(train_personas$Ina, "No info")
+train_personas$Oc <- fct_explicit_na(train_personas$Oc, "No info")
+train_personas$Des <- fct_explicit_na(train_personas$Des, "No info")
+train_personas$Pet <- fct_explicit_na(train_personas$Pet, "No Pet")
+train_personas$P6870 <- fct_explicit_na(train_personas$P6870, "No tamano")
+train_personas$P6430 <- fct_explicit_na(train_personas$P6430, "No evidencia")
 
 
-train_personas_dummy <- model.matrix(~. , train_personas_dummy) %>%
-  as.data.frame()
+install.packages("tidytable")
+library(tidytable)
 
-X <- model.matrix(y ~ ., data = dat)
+
+train_personas %>%
+  get_dummies.()
+
+
 
 
 # reemplazar el ingtot de na por 0. 
@@ -317,8 +328,8 @@ library("caret")
 
 ############################## creando variables agregadas #####################
 
-
-train_hogares$sum_ingresos<-train_personas %>% group_by(id) %>% summarize(Ingtot_hogar=sum(Ingtot,na.rm = TRUE)) 
+for (c in variables_dummy){ 
+train_hogares <- train_personas %>% group_by(id) %>% summarize(c_prom=mean(c,na.rm = TRUE)) 
 
 
 
