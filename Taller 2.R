@@ -153,6 +153,12 @@ train_personas_dummy <- train_personas[,variables_factor]
 train_personas_dummy <- train_personas_dummy %>%
   get_dummies.()
 
+variable_dummy <- names(select_if(train_personas_dummy, is.numeric))
+train_personas_dummy <- as.data.frame(train_personas_dummy)
+
+train_personas_dummy <- train_personas_dummy[,variable_dummy]
+
+
 variables_numeric <- names(select_if(train_personas, is.numeric))
 variables_character <- names(select_if(train_personas, is.character))
 
@@ -160,7 +166,7 @@ train_personas_id <- train_personas[,variables_character]
 train_personas_num <- train_personas[,variables_numeric]
 
 
-train_personas <- cbind(train_personas_id, train_personas_num, train_personas_dummy )
+train_personas <- cbind(train_personas_num, train_personas_dummy )
 
 
 # reemplazar el ingtot de na por 0. 
@@ -192,15 +198,17 @@ Y <- train_personas %>%
   as.matrix()
 
 X <- train_personas %>% 
+  select(-Ingtot)%>%   as.matrix()
+
+X <- train_personas %>% 
   select(-Ingtot)%>% 
   select(-id) %>%  as.matrix()
 
 
-
 # Model Building : Elastic Net Regression
 control <- trainControl(method = "repeatedcv",
-                        number = 5,
-                        repeats = 5,
+                        number = 1,
+                        repeats = 1,
                         search = "random",
                         verboseIter = TRUE)
 
@@ -401,9 +409,11 @@ count(datos_pscore, D) %>% mutate(datos = "antes") %>%
 
 
 #Regularización
+
+
 lambda <- 10^seq(-2, 3, length = 100)
 lasso <- train(
-  Ingtot ~ . ,  data = train_personas, method = "glmnet",
+  Ingtot ~ . ,  data = cbind(X, Y), method = "glmnet",
   trControl = trainControl("cv", number = 10),
   tuneGrid = expand.grid(alpha = 1, lambda=lambda), preProcess = c("center", "scale"))
 lasso
