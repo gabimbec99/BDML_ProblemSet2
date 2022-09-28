@@ -1,12 +1,23 @@
 ## sancocho de paquetes 
+install.packages("vtable")
+library(vtable)
+## sancocho de paquetes 
 
 # create notin operator
 `%notin%` <- Negate(`%in%`)
+
+#### consideraciones 
+
+##############
+
+#### cambia el path de trabajo #######
 
 # Download packages if not available
 pckgs <- c("tidyverse", "data.table", "rlang", "readxl")
 if (any(pckgs %notin% rownames(installed.packages())==TRUE)){
   install.packages(pckgs, repos = c(CRAN = "http://cloud.r-project.org"))}
+install.packages("caret")
+
 
 # load packages
 invisible(sapply(pckgs, FUN = require, character.only = TRUE))
@@ -21,16 +32,15 @@ library(dplyr)
 library(here)
 library(tidyr)
 
-install.packages("caret")
 library("caret")
 
 ## leyendo los datos
 
-train_hogares<-readRDS(here("D:/noveno semestre/big data/BDML_ProblemSet2/data/train_hogares.Rds"))
-train_personas<-readRDS(here("D:/noveno semestre/big data/BDML_ProblemSet2/data/train_personas.Rds"))
+train_hogares<-readRDS(("D:/noveno semestre/big data/BDML_ProblemSet2/data/train_hogares.Rds"))
+train_personas<-readRDS(("D:/noveno semestre/big data/BDML_ProblemSet2/data/train_personas.Rds"))
 
-test_hogares<-readRDS(here("D:/noveno semestre/big data/BDML_ProblemSet2/data/test_hogares.Rds"))
-test_personas<-readRDS(here("D:/noveno semestre/big data/BDML_ProblemSet2/data/test_personas.Rds"))
+test_hogares<-readRDS(("D:/noveno semestre/big data/BDML_ProblemSet2/data/test_hogares.Rds"))
+test_personas<-readRDS(("D:/noveno semestre/big data/BDML_ProblemSet2/data/test_personas.Rds"))
 
 
 
@@ -133,6 +143,27 @@ train_personas$P6210 <- fct_explicit_na(train_personas$P6210, "No sabe,no inform
 train_personas$P6240 <- fct_explicit_na(train_personas$P6240, "Otra actividad")
 train_personas$logIngtot <- log(train_personas$Ingtot+1)
 
+######################## dummys 
+
+variables_factor <- names(select_if(train_personas, is.factor))
+train_personas_dummy <- train_personas[,variables_factor]
+
+
+train_personas_dummy <- model.matrix( ~.-1, data=train_personas_dummy)
+
+## matriz del modelo. 
+
+train_personas_dummy <- as.data.frame(train_personas_dummy)
+
+
+variables_numeric <- names(select_if(train_personas, is.numeric))
+variables_character <- names(select_if(train_personas, is.character))
+
+train_personas_id <- train_personas[,variables_character]
+train_personas_num <- train_personas[,variables_numeric]
+
+
+train_personas <- cbind(train_personas_num, train_personas_dummy, train_personas_id )
 
 ########## limpiar test personas
 
@@ -216,34 +247,243 @@ test_personas$P6430 <- fct_explicit_na(test_personas$P6430, "No evidencia")
 test_personas$P6210 <- fct_explicit_na(test_personas$P6210, "No sabe,no informa")
 test_personas$P6240 <- fct_explicit_na(test_personas$P6240, "Otra actividad")
 
+######################## dummys 
 
-install.packages("tidytable")
-library(tidytable)
-
-save(train_personas, file="D:/noveno semestre/big data/BDML_ProblemSet2/data/train_hogares.RData")
-
-
-variables_factor <- names(select_if(train_personas, is.factor))
-train_personas_dummy <- train_personas[,variables_factor]
+variables_factor <- names(select_if(test_personas, is.factor))
+test_personas_dummy <- test_personas[,variables_factor]
 
 
-train_personas_dummy <- train_personas_dummy %>%
-  get_dummies.()
+test_personas_dummy <- model.matrix( ~.-1, data=test_personas_dummy)
 
-variable_dummy <- names(select_if(train_personas_dummy, is.numeric))
-train_personas_dummy <- as.data.frame(train_personas_dummy)
+## matriz del modelo. 
 
-train_personas_dummy <- train_personas_dummy[,variable_dummy]
+test_personas_dummy <- as.data.frame(test_personas_dummy)
 
 
-variables_numeric <- names(select_if(train_personas, is.numeric))
-variables_character <- names(select_if(train_personas, is.character))
+variables_numeric <- names(select_if(test_personas, is.numeric))
+variables_character <- names(select_if(test_personas, is.character))
 
-train_personas_id <- train_personas[,variables_character]
-train_personas_num <- train_personas[,variables_numeric]
+test_personas_id <- test_personas[,variables_character]
+test_personas_num <- test_personas[,variables_numeric]
 
 
-train_personas <- cbind(train_personas_num, train_personas_dummy )
+test_personas <- cbind(test_personas_num, test_personas_dummy, test_personas_id )
+
+
+########## merge de base de hogar con personas #################
+# colapsar las variables entre los adultos en el hogar #
+
+#### vamos a colapsar la base en stata ###### 
+
+
+write.csv(train_hogares, file = "D:/noveno semestre/big data/BDML_ProblemSet2/data/train_hogares.csv")
+write.csv(train_personas, file = "D:/noveno semestre/big data/BDML_ProblemSet2/data/train_personas.csv")
+
+
+##### volvemos al R. 
+
+
+train_hogares<-read_csv(("D:/noveno semestre/big data/BDML_ProblemSet2/data/train_hogares_final.csv"))
+
+
+#### revisar missing values 
+colSums(is.na(train_hogares))
+
+### crear una variable del valor del arriendo. 
+
+train_hogares <- train_hogares %>% mutate_at(vars("p5130","p5140"), ~replace_na(.,0))
+train_hogares$valor_arriendo = rowSums(train_hogares[,c("p5130", "p5140")])
+train_hogares <- subset(train_hogares, select = -c(p5130,p5140,p5100, clase, dominio, indigente, npobres, nindigentes, fex_c, depto, fex_dpto) )
+colSums(is.na(train_hogares))
+
+# Implementamos oversampling
+library(pacman)
+library(haven)
+
+p_load(AER, tidyverse, caret, MLmetrics, tidymodels, themis)
+
+
+train_hogares$pobre = haven::as_factor(train_hogares$pobre)
+
+train_hogares$pobre <- as.factor(train_hogares$pobre)
+
+glimpse(train_hogares$pobre)
+
+train_hogares$pobre <- factor(train_hogares$pobre)
+
+
+train_hogares_sin_id <- subset(train_hogares, select = -c(id) )
+
+
+
+train_hogares2 <- recipe(pobre ~ .,data = train_hogares_sin_id) %>%
+  themis::step_smote(pobre, over_ratio = 1) %>%
+  prep() %>%
+  bake(new_data = NULL)
+
+prop.table(table(train_hogares2$pobre))
+
+########################### PROBANDO TODO ########################
+library(kableExtra)
+train_hogares2$pobre <- as.numeric(train_hogares2$pobre) - 1
+modelo2 <- lm(formula = "pobre ~ .", data = train_hogares2)
+probs_insample2 <- predict(modelo2, train_hogares2)
+probs_insample2[probs_insample2 < 0] <- 0
+probs_insample2[probs_insample2 > 1] <- 1
+
+# Convertimos la probabilidad en una predicción
+y_hat_insample2 <- as.numeric(probs_insample2 > 0.5)
+
+acc_insample2 <- Accuracy(y_pred = y_hat_insample2, y_true = train_hogares2$pobre)
+
+pre_insample2 <- Precision(y_pred = y_hat_insample2, y_true = train_hogares2$pobre, positive = 1)
+
+rec_insample2 <- Recall(y_pred = y_hat_insample2, y_true = train_hogares2$pobre, positive = 1)
+
+f1_insample2 <- F1_Score(y_pred = y_hat_insample2, y_true = train_hogares2$pobre, positive = 1)
+
+metricas_insample2 <- data.frame(Modelo = "Regresión lineal", 
+                                 "Muestreo" = "SMOTE - Oversampling", 
+                                 "Evaluación" = "Dentro de muestra",
+                                 "Accuracy" = acc_insample2,
+                                 "Precision" = pre_insample2,
+                                 "Recall" = rec_insample2,
+                                 "F1" = f1_insample2)
+
+
+metricas2 <- bind_rows(metricas_insample2)
+metricas <- bind_rows(metricas2)
+
+metricas %>%
+  kbl(digits = 2)  %>%
+  kable_styling(full_width = T)
+#################################################### UNDERSAMPLING 
+
+train_hogares3 <- recipe(pobre ~ .,data = train_hogares_sin_id) %>%
+  themis::step_downsample(pobre) %>%
+  prep() %>%
+  bake(new_data = NULL)
+
+train_hogares3$pobre <- as.numeric(train_hogares3$pobre) - 1
+modelo3 <- lm(formula = "pobre ~ .", data = train_hogares3)
+probs_insample3 <- predict(modelo3, train_hogares3)
+probs_insample3[probs_insample3 < 0] <- 0
+probs_insample3[probs_insample3 > 1] <- 1
+
+# Convertimos la probabilidad en una predicción
+y_hat_insample3 <- as.numeric(probs_insample3 > 0.5)
+
+acc_insample3 <- Accuracy(y_pred = y_hat_insample3, y_true = train_hogares3$pobre)
+
+pre_insample3 <- Precision(y_pred = y_hat_insample3, y_true = train_hogares3$pobre, positive = 1)
+
+rec_insample3 <- Recall(y_pred = y_hat_insample3, y_true = train_hogares3$pobre, positive = 1)
+
+f1_insample3 <- F1_Score(y_pred = y_hat_insample3, y_true = train_hogares3$pobre, positive = 1)
+
+metricas_insample3 <- data.frame(Modelo = "Regresión lineal", 
+                                 "Muestreo" = "SMOTE - Undersampling", 
+                                 "Evaluación" = "Dentro de muestra",
+                                 "Accuracy" = acc_insample3,
+                                 "Precision" = pre_insample3,
+                                 "Recall" = rec_insample3,
+                                 "F1" = f1_insample3)
+
+metricas3 <- bind_rows(metricas_insample3)
+metricas <- bind_rows(metricas2, metricas3)
+
+metricas %>%
+  kbl(digits = 2)  %>%
+  kable_styling(full_width = T)
+
+
+
+###################################### UMBRAL ###########################
+##### proximos pasos: Construir una tabla con oversampling regresion lineal, logit, probit, elastic net, lasso, ridge y random forest. Lo mismo para undersampling
+
+# Esto no se debería hacer sobre la base de testeo pero se hace solo a modo ilustrativo
+thresholds <- seq(0.1, 0.9, length.out = 100)
+opt_t <- data.frame()
+for (t in thresholds) {
+  y_pred_t <- as.numeric(probs_outsample1 > t)
+  f1_t <- F1_Score(y_true = test$infielTRUE, y_pred = y_pred_t,
+                   positive = 1)
+  fila <- data.frame(t = t, F1 = f1_t)
+  opt_t <- bind_rows(opt_t, fila)
+}
+
+mejor_t <-  opt_t$t[which(opt_t$F1 == max(opt_t$F1, na.rm = T))]
+
+ggplot(opt_t, aes(x = t, y = F1)) +
+  geom_point(size = 0.7) +
+  geom_line() +
+  theme_bw() +
+  geom_vline(xintercept = mejor_t, linetype = "dashed", 
+             color = "red") +
+  labs(x = "Threshold")
+
+##################################################
+########### HACIENDO LO MISMO PARA TEST################
+##############################################
+
+########## merge de base de hogar con personas #################
+# colapsar las variables entre los adultos en el hogar #
+
+#### vamos a colapsar la base en stata ###### 
+
+
+write.csv(test_hogares, file = "D:/noveno semestre/big data/BDML_ProblemSet2/data/test_hogares.csv")
+write.csv(test_personas, file = "D:/noveno semestre/big data/BDML_ProblemSet2/data/test_personas.csv")
+
+
+##### volvemos al R. 
+
+
+test_hogares<-read_csv(("D:/noveno semestre/big data/BDML_ProblemSet2/data/test_hogares_final.csv"))
+
+
+#### revisar missing values 
+colSums(is.na(test_hogares))
+
+### crear una variable del valor del arriendo. 
+
+test_hogares <- test_hogares %>% mutate_at(vars("p5130","p5140"), ~replace_na(.,0))
+test_hogares$valor_arriendo = rowSums(test_hogares[,c("p5130", "p5140")])
+test_hogares <- subset(test_hogares, select = -c(p5130,p5140,p5100, clase, dominio, fex_c, depto, fex_dpto) )
+
+colSums(is.na(test_hogares))
+
+
+##############################################
+####################### revisar que tengan la misma estructura 
+#############################################
+
+setdiff(colnames(train_hogares), colnames(test_hogares))
+head(train_hogares$v71)
+
+
+##############################
+############## NO tienen las mismas columnas entonces toca arreglarlo
+###################################
+
+
+train_hogares_X <- subset(train_hogares, select = -c(ingtotug, ingtotugarr, ingpcug, pobre ,depto11 ,v71) )
+test_hogares <- subset(test_hogares, select = -c(v68) )
+
+setdiff(colnames(train_hogares_X), colnames(test_hogares))
+
+
+
+# preparando las dicotomas para el soporte comun
+test_hogares$D <- 1
+train_hogares$D <- 0
+
+### estandarizando el train y test para las mismas variables. 
+colnames_test_hogares <- colnames(test_hogares) 
+train_hogares_X= train_hogares[,colnames_test_hogares]
+train_hogares_X= data.frame(train_hogares_sc)
+
+
 
 
 # reemplazar el ingtot de na por 0. 
