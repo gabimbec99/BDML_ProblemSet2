@@ -170,10 +170,7 @@ train_personas <- cbind(train_personas_num, train_personas_dummy )
 
 
 # reemplazar el ingtot de na por 0. 
-
 train_personas <- train_personas %>% mutate_at(vars("Ingtot"), ~replace_na(.,0))
-
-train_personas <- data.frame(train_personas[, !names(train_personas) %in% "Depto"],model.matrix(~ Depto-1,train_personas))
 
 
 # Installing Packages
@@ -191,6 +188,13 @@ rm(pobre_hogares, ingreso_hogares, ingreso_personas)
 
 library(caret)
 
+X <- train_personas[,"P6040"]
+Y <- train_personas[,"Ingtot"]
+
+
+sum(is.na(train_personas$Ingtot))
+
+
 # X and Y datasets
 Y <- train_personas %>% 
   select(Ingtot) %>% 
@@ -199,6 +203,8 @@ Y <- train_personas %>%
 
 X <- train_personas %>% 
   select(-Ingtot)%>%   as.matrix()
+
+class(Y)
 
 X <- train_personas %>% 
   select(-Ingtot)%>% 
@@ -214,11 +220,11 @@ control <- trainControl(method = "repeatedcv",
 
 # Training ELastic Net Regression model
 elastic_model <- train(Ingtot ~ .,
-                       data = cbind(X, Y),
+                       data = cbind(Y, X),
                        method = "glmnet",
                        preProcess = c("center", "scale"),
-                       tuneLength = 25,
-                       trControl = control, na.action = na.exclude)
+                       tuneLength = 2,
+                       trControl = control)
 
 elastic_model
 
@@ -409,11 +415,21 @@ count(datos_pscore, D) %>% mutate(datos = "antes") %>%
 
 
 #Regularización
+library(glmnet)
+cv_model <- cv.glmnet(X, Y, alpha = 1)
 
+best_lambda <- cv_model$lambda.min
+best_lambda
+
+plot(cv_model) 
+
+
+best_model <- glmnet(X, Y, alpha = 1, lambda = best_lambda)
+coef(best_model)
 
 lambda <- 10^seq(-2, 3, length = 100)
 lasso <- train(
-  Ingtot ~ . ,  data = cbind(X, Y), method = "glmnet",
+  Y ~ . ,  data = cbind(X, Y), method = "glmnet",
   trControl = trainControl("cv", number = 10),
   tuneGrid = expand.grid(alpha = 1, lambda=lambda), preProcess = c("center", "scale"))
 lasso
