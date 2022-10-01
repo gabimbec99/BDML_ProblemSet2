@@ -42,6 +42,13 @@ train_personas<-readRDS(("D:/noveno semestre/big data/BDML_ProblemSet2/data/trai
 test_hogares<-readRDS(("D:/noveno semestre/big data/BDML_ProblemSet2/data/test_hogares.Rds"))
 test_personas<-readRDS(("D:/noveno semestre/big data/BDML_ProblemSet2/data/test_personas.Rds"))
 
+#Directorios GM
+train_hogares<-readRDS(("/Users/gabrielamejia/Documents/GitHub/BDML_ProblemSet2/data/train_hogares.Rds"))
+train_personas<-readRDS(("/Users/gabrielamejia/Documents/GitHub/BDML_ProblemSet2/data/train_personas.Rds"))
+
+test_hogares<-readRDS(("/Users/gabrielamejia/Documents/GitHub/BDML_ProblemSet2/data/test_hogares.Rds"))
+test_personas<-readRDS(("/Users/gabrielamejia/Documents/GitHub/BDML_ProblemSet2/data/test_personas.Rds"))
+
 
 
 ############ limpieza de base de entrenamiento  
@@ -63,6 +70,10 @@ train_personas = haven::as_factor(train_personas)
 
 # import the codebook 
 key <- read_excel("D:/noveno semestre/big data/BDML_ProblemSet2/data/recode_vals.xlsx") %>%
+  select(c("var_name"),contains("value")) 
+
+#Directorio GM
+key <- read_excel("/Users/gabrielamejia/Documents/GitHub/BDML_ProblemSet2/data/recode_vals.xlsx") %>%
   select(c("var_name"),contains("value")) 
 
 variables_cambio <- key[["var_name"]]
@@ -170,7 +181,7 @@ train_personas <- cbind(train_personas_num, train_personas_dummy, train_personas
 test_personas = haven::as_factor(test_personas)
 
 # import the codebook 
-key <- read_excel("D:/noveno semestre/big data/BDML_ProblemSet2/data/recode_vals.xlsx") %>%
+key <- read_excel("/Users/gabrielamejia/Documents/GitHub/BDML_ProblemSet2/data/recode_vals.xlsx") %>%
   select(c("var_name"),contains("value")) 
 
 variables_cambio <- key[["var_name"]]
@@ -247,6 +258,9 @@ test_personas$P6430 <- fct_explicit_na(test_personas$P6430, "No evidencia")
 test_personas$P6210 <- fct_explicit_na(test_personas$P6210, "No sabe,no informa")
 test_personas$P6240 <- fct_explicit_na(test_personas$P6240, "Otra actividad")
 
+######################## Estadísticas descriptivas de las bases entrenamiento y testeo para personas
+st(train_personas, out='latex')
+st(test_personas, out='latex')
 ######################## dummys 
 
 variables_factor <- names(select_if(test_personas, is.factor))
