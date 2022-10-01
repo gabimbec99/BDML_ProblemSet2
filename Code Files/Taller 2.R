@@ -602,6 +602,874 @@ train_hogares2sc<-cbind(train_hogares2,sc_total_export)
 train_hogares2sc<-train_hogares2sc[train_hogares2sc$Predicho %in% c('No'),]
 write.csv(train_hogares2sc,file="train_hogares_sc.csv")
 
+################################################
+############## Haciendo los modelos de verdad. 
+################################################
+
+train_hogares_cs<-read_csv("train_hogares_sc.csv")
+
+train_hogares_cs <- subset(train_hogares_cs, select = -c(Muestra, Predicho, D) )
+train_hogares_cs <- train_hogares_cs %>% column_to_rownames(., var = '...1')
+
+train_hogares_cs$pobre<- ifelse(train_hogares_cs$pobre=="Yes",1,0)
+
+
+colnames_hogares_cs <- c("lp", "p6040","p6800","valor_arriendo","p5000","p5090","nper","orden","p6210básicasecundaria6o9o", "p6210media10o13o", "p6210superiorouniversitaria", "p6430obrerooempleadodelgobierno","p6430empleadodoméstico","p6430trabajadorporcuentapropia", "p6430patrónoempleador","p6430trabajadorfamiliarsinremune", "p6430trabajadorsinremuneraciónen", "p6430jornaleroopeón","p6240buscandotrabajo","p6240estudiando","p6240oficiosdelhogar","p6240incapacitadopermanenteparat", "p6240otraactividad") 
+pobre = train_hogares_cs[,c("pobre")]
+train_hogares_final_X = train_hogares_cs[,colnames_hogares_cs]
+train_hogares_final=cbind(train_hogares_final_X,pobre)
+train_hogares_final= data.frame(train_hogares_final)
+
+
+variables_continuas <- as.data.frame(subset(train_hogares_final, select = c("p6040","p6800","valor_arriendo","p5000","p5090","lp")))
+variables_continuas$p60402 <- (variables_continuas$p6040)^2
+
+variables_factor <- as.data.frame(subset(train_hogares_final, select = -c(p6040,p6800,valor_arriendo,p5000,p5090,lp)))
+
+
+train_hogares_final_continuas <- model.matrix( ~.  ^2 -1, data=variables_continuas)
+train_hogares_final  <- cbind(train_hogares_final_continuas, variables_factor)
+
+
+set.seed(1)
+
+#use 70% of dataset as training set and 30% as test set
+sample <- sample(c(TRUE, FALSE), nrow(train_hogares_final), replace=TRUE, prob=c(0.7,0.3))
+sub_train_hogares  <- train_hogares_final[sample, ]
+sub_test_hogares   <- train_hogares_final[!sample, ]
+sub_y_train <- subset(sub_train_hogares, select = c(pobre) )
+sub_y_test <- subset(sub_test_hogares, select = c(pobre) )
+## eliminar pobre y ID de las X 
+sub_train_hogares <- subset(sub_train_hogares, select = -c(pobre) )
+sub_test_hogares <- subset(sub_test_hogares, select = -c(pobre) )
+
+
+########################################################
+############### modelos 
+#######################################################
+
+
+# Implementamos oversampling
+
+sub_y_train$pobre <- as.factor(sub_y_train$pobre)
+train_hogares2 <- recipe(pobre ~ .,data = cbind(sub_train_hogares, sub_y_train)) %>%
+  themis::step_smote(pobre, over_ratio = 1) %>%
+  prep() %>%
+  bake(new_data = NULL)
+
+prop.table(table(train_hogares2$pobre))
+
+
+
+train_hogares2$pobre <- as.numeric(train_hogares2$pobre) -1
+modelo2 <- lm(formula = "pobre ~ .", data = train_hogares2)
+probs_insample2 <- predict(modelo2, train_hogares2)
+probs_insample2[probs_insample2 < 0] <- 0
+probs_insample2[probs_insample2 > 1] <- 1
+probs_outsample2 <- predict(modelo2, sub_test_hogares)
+probs_outsample2[probs_outsample2 < 0] <- 0
+probs_outsample2[probs_outsample2 > 1] <- 1
+
+# Convertimos la probabilidad en una predicción
+y_hat_insample2 <- as.numeric(probs_insample2 > 0.5)
+y_hat_outsample2 <- as.numeric(probs_outsample2 > 0.5)
+
+y_hat_cm<-as.data.frame(y_hat_insample2)
+cm=confusionMatrix(data =as.factor(y_hat_cm$y_hat_insample2), reference = as.factor(train_hogares2$pobre))
+
+sen_insample2<-as.numeric(cm$byClass[1][1])
+spec_insample2<-as.numeric(cm$byClass[2][1])
+fpr_insample2<-1-spec_insample2
+
+y_hat_cm<-as.data.frame(y_hat_outsample2)
+cm=confusionMatrix(data =as.factor(y_hat_cm$y_hat_outsample2), reference = as.factor(sub_y_test$pobre))
+
+sen_outsample2<-as.numeric(cm$byClass[1][1])
+spec_outsample2<-as.numeric(cm$byClass[2][1])
+fpr_outsample2<-1-spec_outsample2
+
+
+acc_insample2 <- Accuracy(y_pred = y_hat_insample2, y_true = train_hogares2$pobre)
+acc_outsample2 <- Accuracy(y_pred = y_hat_outsample2, y_true = sub_y_test)
+
+pre_insample2 <- Precision(y_pred = y_hat_insample2, y_true = train_hogares2$pobre, positive = 1)
+pre_outsample2 <- Precision(y_pred = y_hat_outsample2, y_true = sub_y_test$pobre, positive = 1)
+
+rec_insample2 <- Recall(y_pred = y_hat_insample2, y_true = train_hogares2$pobre, positive = 1)
+rec_outsample2 <- Recall(y_pred = y_hat_outsample2, y_true = sub_y_test$pobre, positive = 1)
+
+f1_insample2 <- F1_Score(y_pred = y_hat_insample2, y_true = train_hogares2$pobre, positive = 1)
+f1_outsample2 <- F1_Score(y_pred = y_hat_outsample2, y_true = sub_y_test$pobre, positive = 1)
+
+metricas_insample2 <- data.frame(Modelo = "Linear Model", 
+                                 "Muestreo" = "SMOTE - Oversampling", 
+                                 "Evaluación" = "Dentro de muestra",
+                                 "Sensibility"= sen_insample2,
+                                 "Specificity" = spec_insample2,
+                                 "FPR" =fpr_insample2,
+                                 "Accuracy" = acc_insample2,
+                                 "Precision" = pre_insample2,
+                                 "Recall" = rec_insample2,
+                                 "F1" = f1_insample2)
+
+metricas_outsample2 <- data.frame(Modelo = "Linear Model", 
+                                  "Muestreo" = "SMOTE - Oversampling", 
+                                  "Evaluación" = "Fuera de muestra",
+                                  "Sensibility"= sen_outsample2,
+                                  "Specificity" = spec_outsample2,
+                                  "FPR" =fpr_outsample2,
+                                  "Accuracy" = acc_outsample2,
+                                  "Precision" = pre_outsample2,
+                                  "Recall" = rec_outsample2,
+                                  "F1" = f1_outsample2)
+
+
+metricas2 <- bind_rows(metricas_insample2, metricas_outsample2)
+metricas <- bind_rows(metricas2)
+
+metricas %>%
+  kbl(digits = 2)  %>%
+  kable_styling(full_width = T)
+
+
+#########################################################################
+########################### LASSO PROBABILISTICO ########################
+#########################################################################
+
+library(glmnet)
+library(kableExtra)
+
+
+train_hogares2_X <- subset(train_hogares2, select = -c(pobre) )
+train_hogares2_X <- as.matrix(train_hogares2_X)
+train_hogares2_y <- train_hogares2[,"pobre"]
+
+glmmod <- cv.glmnet(train_hogares2_X, as.factor(train_hogares2_y$pobre), alpha = 1, family="binomial")
+
+train_hogares2$pobre <- as.numeric(train_hogares2$pobre)
+probs_insample3 <- predict(glmmod, train_hogares2_X)
+probs_insample3[probs_insample3 < 0] <- 0
+probs_insample3[probs_insample3 > 1] <- 1
+probs_outsample3 <- predict(glmmod, as.matrix(sub_test_hogares))
+probs_outsample3[probs_outsample3 < 0] <- 0
+probs_outsample3[probs_outsample3 > 1] <- 1
+
+# Convertimos la probabilidad en una predicción
+y_hat_insample3 <- as.numeric(probs_insample3 > 0.5)
+y_hat_outsample3 <- as.numeric(probs_outsample3 > 0.5)
+
+y_hat_cm<-as.data.frame(y_hat_insample3)
+cm=confusionMatrix(data =as.factor(y_hat_cm$y_hat_insample3), reference = as.factor(train_hogares2$pobre))
+
+sen_insample3<-as.numeric(cm$byClass[1][1])
+spec_insample3<-as.numeric(cm$byClass[2][1])
+fpr_insample3<-1-spec_insample3
+
+y_hat_cm<-as.data.frame(y_hat_outsample3)
+cm=confusionMatrix(data =as.factor(y_hat_cm$y_hat_outsample3), reference = as.factor(sub_y_test$pobre))
+
+sen_outsample3<-as.numeric(cm$byClass[1][1])
+spec_outsample3<-as.numeric(cm$byClass[2][1])
+fpr_outsample3<-1-spec_outsample3
+
+
+acc_insample3 <- Accuracy(y_pred = y_hat_insample3, y_true = train_hogares2$pobre)
+acc_outsample3 <- Accuracy(y_pred = y_hat_outsample3, y_true = sub_y_test)
+
+pre_insample3 <- Precision(y_pred = y_hat_insample3, y_true = train_hogares2$pobre, positive = 1)
+pre_outsample3 <- Precision(y_pred = y_hat_outsample3, y_true = sub_y_test$pobre, positive = 1)
+
+rec_insample3 <- Recall(y_pred = y_hat_insample3, y_true = train_hogares2$pobre, positive = 1)
+rec_outsample3 <- Recall(y_pred = y_hat_outsample3, y_true = sub_y_test$pobre, positive = 1)
+
+f1_insample3 <- F1_Score(y_pred = y_hat_insample3, y_true = train_hogares2$pobre, positive = 1)
+f1_outsample3 <- F1_Score(y_pred = y_hat_outsample3, y_true = sub_y_test$pobre, positive = 1)
+
+metricas_insample3 <- data.frame(Modelo = "Lasso", 
+                                 "Muestreo" = "SMOTE - Oversampling", 
+                                 "Evaluación" = "Dentro de muestra",
+                                 "Sensibility"= sen_insample3,
+                                 "Specificity" = spec_insample3,
+                                 "FPR" =fpr_insample3,
+                                 "Accuracy" = acc_insample3,
+                                 "Precision" = pre_insample3,
+                                 "Recall" = rec_insample3,
+                                 "F1" = f1_insample3)
+
+metricas_outsample3 <- data.frame(Modelo = "Lasso", 
+                                  "Muestreo" = "SMOTE - Oversampling", 
+                                  "Evaluación" = "Fuera de muestra",
+                                  "Sensibility"= sen_outsample3,
+                                  "Specificity" = spec_outsample3,
+                                  "FPR" =fpr_outsample3,
+                                  "Accuracy" = acc_outsample3,
+                                  "Precision" = pre_outsample3,
+                                  "Recall" = rec_outsample3,
+                                  "F1" = f1_outsample3)
+                                  
+
+
+metricas3 <- bind_rows(metricas_insample3, metricas_outsample3)
+metricas <- bind_rows(metricas2, metricas3)
+
+metricas %>%
+  kbl(digits = 2)  %>%
+  kable_styling(full_width = T)
+
+
+################################################################
+###################### Ridge  ##########################
+################################################################
+
+glmmod_ridge<-cv.glmnet(train_hogares2_X, as.factor(train_hogares2$pobre), alpha = 0, family="binomial")
+
+train_hogares2$pobre <- as.numeric(train_hogares2$pobre)
+probs_insample4 <- predict(glmmod_ridge, train_hogares2_X)
+probs_insample4[probs_insample4 < 0] <- 0
+probs_insample4[probs_insample4 > 1] <- 1
+probs_outsample4 <- predict(glmmod, as.matrix(sub_test_hogares))
+probs_outsample4[probs_outsample4 < 0] <- 0
+probs_outsample4[probs_outsample4 > 1] <- 1
+
+# Convertimos la probabilidad en una predicción
+y_hat_insample4 <- as.numeric(probs_insample4 > 0.5)
+y_hat_outsample4 <- as.numeric(probs_outsample4 > 0.5)
+
+y_hat_cm<-as.data.frame(y_hat_insample4)
+cm=confusionMatrix(data =as.factor(y_hat_cm$y_hat_insample4), reference = as.factor(train_hogares2$pobre))
+
+sen_insample4<-as.numeric(cm$byClass[1][1])
+spec_insample4<-as.numeric(cm$byClass[2][1])
+fpr_insample4<-1-spec_insample4
+
+y_hat_cm<-as.data.frame(y_hat_outsample4)
+cm=confusionMatrix(data =as.factor(y_hat_cm$y_hat_outsample4), reference = as.factor(sub_y_test$pobre))
+
+sen_outsample4<-as.numeric(cm$byClass[1][1])
+spec_outsample4<-as.numeric(cm$byClass[2][1])
+fpr_outsample4<-1-spec_outsample4
+
+
+acc_insample4 <- Accuracy(y_pred = y_hat_insample4, y_true = train_hogares2$pobre)
+acc_outsample4 <- Accuracy(y_pred = y_hat_outsample4, y_true = sub_y_test)
+
+pre_insample4 <- Precision(y_pred = y_hat_insample4, y_true = train_hogares2$pobre, positive = 1)
+pre_outsample4 <- Precision(y_pred = y_hat_outsample4, y_true = sub_y_test$pobre, positive = 1)
+
+rec_insample4 <- Recall(y_pred = y_hat_insample4, y_true = train_hogares2$pobre, positive = 1)
+rec_outsample4 <- Recall(y_pred = y_hat_outsample4, y_true = sub_y_test$pobre, positive = 1)
+
+f1_insample4 <- F1_Score(y_pred = y_hat_insample4, y_true = train_hogares2$pobre, positive = 1)
+f1_outsample4 <- F1_Score(y_pred = y_hat_outsample4, y_true = sub_y_test$pobre, positive = 1)
+
+metricas_insample4 <- data.frame(Modelo = "Ridge", 
+                                 "Muestreo" = "SMOTE - Oversampling", 
+                                 "Evaluación" = "Dentro de muestra",
+                                 "Sensibility"= sen_insample4,
+                                 "Specificity" = spec_insample4,
+                                 "FPR" =fpr_insample4,
+                                 "Accuracy" = acc_insample4,
+                                 "Precision" = pre_insample4,
+                                 "Recall" = rec_insample4,
+                                 "F1" = f1_insample4)
+
+metricas_outsample4 <- data.frame(Modelo = "Ridge", 
+                                  "Muestreo" = "SMOTE - Oversampling", 
+                                  "Evaluación" = "Fuera de muestra",
+                                  "Sensibility"= sen_outsample4,
+                                  "Specificity" = spec_outsample4,
+                                  "FPR" =fpr_outsample4,
+                                  "Accuracy" = acc_outsample4,
+                                  "Precision" = pre_outsample4,
+                                  "Recall" = rec_outsample4,
+                                  "F1" = f1_outsample4)
+
+
+metricas4 <- bind_rows(metricas_insample4, metricas_outsample4)
+metricas <- bind_rows(metricas2, metricas3, metricas4)
+
+metricas %>%
+  kbl(digits = 2)  %>%
+  kable_styling(full_width = T)
+
+
+##################################################
+################# RANDOM FOREST 
+#################################################
+install.packages("randomForest")
+library(randomForest)
+fiveStats <- function(...) c(twoClassSummary(...), defaultSummary(...))
+
+train_hogares2$pobre <- as.numeric(train_hogares2$pobre)
+
+fitControl <- trainControl(
+  method = 'cv', 
+  summaryFunction = fiveStats,     # k-fold cross validation
+  number = 5,                      # number of folds
+  savePredictions = 'final',       # saves predictions for optimal tuning parameter
+  classProbs = T,                  # should class probabilities be returned  # results summary function
+) 
+
+train_hogares2$pobre<- ifelse(train_hogares2$pobre==0,"No","Yes")
+train_hogares2$pobre <- as.factor(train_hogares2$pobre)
+
+model_rf = train(pobre ~ ., data=train_hogares2, method='rf', tuneLength=5, trControl = fitControl, metric="Sens")
+
+
+
+probs_insample6 <- predict(model_rf, train_hogares2_X)
+probs_outsample6 <- predict(model_rf, as.matrix(sub_test_hogares))
+
+
+
+# Convertimos la probabilidad en una predicción
+y_hat_insample6 <- as.numeric(probs_insample6) - 1
+y_hat_outsample6 <- as.numeric(probs_outsample6) -1
+
+train_hogares2$pobre <- as.numeric(train_hogares2$pobre)-1
+
+y_hat_cm<-as.data.frame(y_hat_insample6)
+cm=confusionMatrix(data =as.factor(y_hat_cm$y_hat_insample6), reference = as.factor(train_hogares2$pobre))
+
+sen_insample6<-as.numeric(cm$byClass[1][1])
+spec_insample6<-as.numeric(cm$byClass[2][1])
+fpr_insample6<-1-spec_insample6
+
+y_hat_cm<-as.data.frame(y_hat_outsample6)
+cm=confusionMatrix(data =as.factor(y_hat_cm$y_hat_outsample6), reference = as.factor(sub_y_test$pobre))
+
+sen_outsample6<-as.numeric(cm$byClass[1][1])
+spec_outsample6<-as.numeric(cm$byClass[2][1])
+fpr_outsample6<-1-spec_outsample6
+
+acc_insample6 <- Accuracy(y_pred = y_hat_insample6, y_true = train_hogares2_y$pobre)
+acc_outsample6 <- Accuracy(y_pred = y_hat_outsample6, y_true = sub_y_test)
+
+pre_insample6 <- Precision(y_pred = y_hat_insample6, y_true = train_hogares2_y$pobre, positive = 1)
+pre_outsample6 <- Precision(y_pred = y_hat_outsample6, y_true = sub_y_test$pobre, positive = 1)
+
+rec_insample6 <- Recall(y_pred = y_hat_insample6, y_true = train_hogares2_y$pobre, positive = 1)
+rec_outsample6 <- Recall(y_pred = y_hat_outsample6, y_true = sub_y_test$pobre, positive = 1)
+
+f1_insample6 <- F1_Score(y_pred = y_hat_insample6, y_true = train_hogares2_y$pobre, positive = 1)
+f1_outsample6 <- F1_Score(y_pred = y_hat_outsample6, y_true = sub_y_test$pobre, positive = 1)
+
+metricas_insample6 <- data.frame(Modelo = "RF", 
+                                 "Muestreo" = "SMOTE - Oversampling", 
+                                 "Evaluación" = "Dentro de muestra",
+                                 "Sensibility"= sen_insample6,
+                                 "Specificity" = spec_insample6,
+                                 "FPR" =fpr_insample6,
+                                 "Accuracy" = acc_insample6,
+                                 "Precision" = pre_insample6,
+                                 "Recall" = rec_insample6,
+                                 "F1" = f1_insample6)
+
+metricas_outsample6 <- data.frame(Modelo = "RF", 
+                                  "Muestreo" = "SMOTE - Oversampling", 
+                                  "Evaluación" = "Fuera de muestra",
+                                  "Sensibility"= sen_outsample6,
+                                  "Specificity" = spec_outsample6,
+                                  "FPR" =fpr_outsample6,
+                                  "Accuracy" = acc_outsample6,
+                                  "Precision" = pre_outsample6,
+                                  "Recall" = rec_outsample6,
+                                  "F1" = f1_outsample6)
+
+metricas6 <- bind_rows(metricas_insample6, metricas_outsample6)
+metricas <- bind_rows(metricas2, metricas3, metricas4 ,metricas6)
+
+metricas %>%
+  kbl(digits = 2)  %>%
+  kable_styling(full_width = T)
+
+
+
+# Estadisticas descriptivas
+install.packages("ggplot2")
+library(ggplot2)
+
+remotes::update_packages("ggplot2")
+
+#Histograma simple
+ggplot(X_ingreso_hogares, aes(x=ingreso_hogares)) +
+  geom_histogram(position="identity", , bins=200)+
+  scale_x_continuous(n.breaks=10,labels=scales::dollar, limits=c(0, 15000000))+labs(title= "Histograma del Ingreso per cápita del hogar", subtitle = "Colombia", caption="Fuente: GEIH 2018")+  
+  #Añadir los labels de los ejes
+  xlab("Ingresos per capita del hogar") + ylab("Densidad") + theme_bw() 
+
+# grafico de waffle 
+#Se llaman los siguientes paquetes y librerias para los gráficos:
+install.packages("ggplot2")
+install.packages("waffle")
+library(ggplot2)
+library(waffle)
+
+
+# Gráfico de waffle
+
+
+test <- c(`No Pobre`= 131936, `Pobre`= 33024)
+waffle(test/10000, rows=2, size=0.8, title="Hogares pobres", 
+       xlab="1 cuadrado = 10 000 personas",colors = c(RColorBrewer::brewer.pal(3, "Set2")[1:2]))
+
+waffle(int2/1000, rows=10, size=0.8, title="Estrato de los individuos", 
+       xlab="1 cuadrado = 1000 personas")
+
+
+ggplot(train_personas, aes(x=Estrato1, y=)) + geom_jitter()
+
+summary(X_pobre_hogares$Pobre)
+
+# Emparejamiento de la base de entrenamiento y prueba
+
+#Selección de variables
+# Emparejamiento de la base de entrenamiento y prueba
+
+
+############################## REGRESIÓN #####################
+
+#################################################
+####### Haciendo para el modelo de regresión #####
+#################################################
+
+load("model_rf_sc.RData")
+train_hogares2 <- predict(model_rf3, train_hogares)
+train_hogares2 <- cbind(train_hogares2, train_hogares)
+
+
+train_hogares_reg <- train_hogares2[train_hogares2$train_hogares2 %in% c('No'),]
+train_hogares_reg <- subset(train_hogares_reg, select = -c(train_hogares2) )
+###############
+train_hogares_reg <- na.omit(train_hogares_reg)
+
+######################################################################
+colnames_hogares_cs <- c("lp", "p6040","p6800","valor_arriendo","p5000","p5090","nper","orden","p6210básicasecundaria6o9o", "p6210media10o13o", "p6210superiorouniversitaria", "p6430obrerooempleadodelgobierno","p6430empleadodoméstico","p6430trabajadorporcuentapropia", "p6430patrónoempleador","p6430trabajadorfamiliarsinremune", "p6430trabajadorsinremuneraciónen", "p6430jornaleroopeón","p6240buscandotrabajo","p6240estudiando","p6240oficiosdelhogar","p6240incapacitadopermanenteparat", "p6240otraactividad") 
+pobre = train_hogares_reg[,c("ingpcug")]
+train_hogares_final_X = train_hogares_reg[,colnames_hogares_cs]
+train_hogares_final=cbind(train_hogares_final_X,pobre)
+train_hogares_final= data.frame(train_hogares_final)
+
+
+variables_continuas <- as.data.frame(subset(train_hogares_final, select = c("p6040","p6800","valor_arriendo","p5000","p5090","lp")))
+variables_continuas$p60402 <- (variables_continuas$p6040)^2
+
+variables_factor <- as.data.frame(subset(train_hogares_final, select = -c(p6040,p6800,valor_arriendo,p5000,p5090,lp)))
+
+
+train_hogares_final_continuas <- model.matrix( ~.  ^2 -1, data=variables_continuas)
+train_hogares_final  <- cbind(train_hogares_final_continuas, variables_factor)
+
+
+train_hogares_final$pobre <- as.numeric(train_hogares_final$pobre)
+
+set.seed(1)
+
+#use 70% of dataset as training set and 30% as test set
+sample <- sample(c(TRUE, FALSE), nrow(train_hogares_final), replace=TRUE, prob=c(0.7,0.3))
+sub_train_hogares  <- train_hogares_final[sample, ]
+sub_test_hogares   <- train_hogares_final[!sample, ]
+
+pobre_test <- ifelse(sub_test_hogares$pobre > sub_test_hogares$lp,0,1)
+pobre_train <- ifelse(sub_train_hogares$pobre > sub_train_hogares$lp,0,1)
+
+sub_y_train <- subset(sub_train_hogares, select = c(pobre) )
+sub_y_test <- subset(sub_test_hogares, select = c(pobre) )
+## eliminar pobre y ID de las X 
+sub_train_hogares <- subset(sub_train_hogares, select = -c(pobre) )
+sub_test_hogares <- subset(sub_test_hogares, select = -c(pobre) )
+
+
+########################################################
+############### modelos 
+#######################################################
+
+
+
+##########################
+####### Linear model #####
+##########################
+
+modelo2 <- lm(formula = "pobre ~ .", data = as.data.frame(cbind(sub_train_hogares, sub_y_train)))
+probs_insample2 <- predict(modelo2, sub_train_hogares)
+rmse_insample2 <- sqrt(mean((sub_y_train$pobre - probs_insample2)^2))
+probs_insample2[probs_insample2 < sub_train_hogares$lp] <- 1
+probs_insample2[probs_insample2 > sub_train_hogares$lp] <- 0
+probs_outsample2 <- predict(modelo2, sub_test_hogares)
+rmse_outsample2 <- sqrt(mean((sub_y_test$pobre - probs_outsample2)^2))
+probs_outsample2[probs_outsample2 < sub_test_hogares$lp] <- 1
+probs_outsample2[probs_outsample2 > sub_test_hogares$lp] <- 0
+
+# Convertimos la probabilidad en una predicción
+y_hat_insample2 <- as.numeric(probs_insample2)
+y_hat_outsample2 <- as.numeric(probs_outsample2)
+
+y_hat_cm<-as.data.frame(y_hat_insample2)
+cm=confusionMatrix(data =as.factor(y_hat_cm$y_hat_insample2), reference = as.factor(pobre_train))
+
+sen_insample2<-as.numeric(cm$byClass[1][1])
+spec_insample2<-as.numeric(cm$byClass[2][1])
+fpr_insample2<-1-spec_insample2
+
+y_hat_cm<-as.data.frame(y_hat_outsample2)
+cm=confusionMatrix(data =as.factor(y_hat_cm$y_hat_outsample2), reference = as.factor(pobre_test))
+
+sen_outsample2<-as.numeric(cm$byClass[1][1])
+spec_outsample2<-as.numeric(cm$byClass[2][1])
+fpr_outsample2<-1-spec_outsample2
+
+
+acc_insample2 <- Accuracy(y_pred = y_hat_insample2, y_true = pobre_train)
+acc_outsample2 <- Accuracy(y_pred = y_hat_outsample2, y_true = pobre_test)
+
+pre_insample2 <- Precision(y_pred = y_hat_insample2, y_true = pobre_train, positive = 1)
+pre_outsample2 <- Precision(y_pred = y_hat_outsample2, y_true = pobre_test, positive = 1)
+
+rec_insample2 <- Recall(y_pred = y_hat_insample2, y_true = pobre_train, positive = 1)
+rec_outsample2 <- Recall(y_pred = y_hat_outsample2, y_true = pobre_test, positive = 1)
+
+f1_insample2 <- F1_Score(y_pred = y_hat_insample2, y_true = pobre_train, positive = 1)
+f1_outsample2 <- F1_Score(y_pred = y_hat_outsample2, y_true = pobre_test, positive = 1)
+
+
+
+
+metricas_insample2 <- data.frame(Modelo = "Linear Model", 
+                                 "Muestreo" = "SMOTE - Oversampling", 
+                                 "Evaluación" = "Dentro de muestra",
+                                 "Sensibility"= sen_insample2,
+                                 "Specificity" = spec_insample2,
+                                 "FPR" =fpr_insample2,
+                                 "Accuracy" = acc_insample2,
+                                 "Precision" = pre_insample2,
+                                 "Recall" = rec_insample2,
+                                 "F1" = f1_insample2, "RMSE"=rmse_insample2)
+
+metricas_outsample2 <- data.frame(Modelo = "Linear Model", 
+                                  "Muestreo" = "SMOTE - Oversampling", 
+                                  "Evaluación" = "Fuera de muestra",
+                                  "Sensibility"= sen_outsample2,
+                                  "Specificity" = spec_outsample2,
+                                  "FPR" =fpr_outsample2,
+                                  "Accuracy" = acc_outsample2,
+                                  "Precision" = pre_outsample2,
+                                  "Recall" = rec_outsample2,
+                                  "F1" = f1_outsample2, "RMSE"=rmse_outsample2)
+
+
+metricas2 <- bind_rows(metricas_insample2, metricas_outsample2)
+metricas <- bind_rows(metricas2)
+
+metricas %>%
+  kbl(digits = 2)  %>%
+  kable_styling(full_width = T)
+
+
+#########################################################################
+########################### LASSO PROBABILISTICO ########################
+#########################################################################
+
+
+train_hogares2_X <- subset(as.data.frame(cbind(sub_train_hogares, sub_y_train)), select = -c(pobre))
+train_hogares2_X <- as.matrix(train_hogares2_X)
+train_hogares2_y <- as.data.frame(cbind(sub_train_hogares, sub_y_train))[,"pobre"]
+
+glmmod <- cv.glmnet(train_hogares2_X, train_hogares2_y, alpha = 1)
+
+probs_insample3 <- predict(glmmod, as.matrix(sub_train_hogares))
+rmse_insample3 <- sqrt(mean((sub_y_train$pobre - probs_insample3)^2))
+probs_insample3[probs_insample3 < sub_train_hogares$lp] <- 1
+probs_insample3[probs_insample3 > sub_train_hogares$lp] <- 0
+
+probs_outsample3 <- predict(glmmod, as.matrix(sub_test_hogares))
+rmse_outsample3 <- sqrt(mean((sub_y_test$pobre - probs_outsample3)^2))
+probs_outsample3[probs_outsample3 < sub_test_hogares$lp]<- 1
+probs_outsample3[probs_outsample3 > sub_test_hogares$lp] <- 0
+
+# Convertimos la probabilidad en una predicción
+y_hat_insample3 <- as.numeric(probs_insample3)
+y_hat_outsample3 <- as.numeric(probs_outsample3)
+
+y_hat_cm<-as.data.frame(y_hat_insample3)
+cm=confusionMatrix(data =as.factor(y_hat_cm$y_hat_insample3), reference = as.factor(pobre_train))
+
+sen_insample3<-as.numeric(cm$byClass[1][1])
+spec_insample3<-as.numeric(cm$byClass[2][1])
+fpr_insample3<-1-spec_insample3
+
+
+y_hat_cm<-as.data.frame(y_hat_outsample3)
+cm=confusionMatrix(data =as.factor(y_hat_cm$y_hat_outsample3), reference = as.factor(pobre_test))
+
+sen_outsample3<-as.numeric(cm$byClass[1][1])
+spec_outsample3<-as.numeric(cm$byClass[2][1])
+fpr_outsample3<-1-spec_outsample3
+
+
+acc_insample3 <- Accuracy(y_pred = y_hat_insample3, y_true = pobre_train)
+acc_outsample3 <- Accuracy(y_pred = y_hat_outsample3, y_true =pobre_test)
+
+pre_insample3 <- Precision(y_pred = y_hat_insample3, y_true = pobre_train, positive = 1)
+pre_outsample3 <- Precision(y_pred = y_hat_outsample3, y_true =pobre_test, positive = 1)
+
+rec_insample3 <- Recall(y_pred = y_hat_insample3, y_true = pobre_train, positive = 1)
+rec_outsample3 <- Recall(y_pred = y_hat_outsample3, y_true =pobre_test, positive = 1)
+
+f1_insample3 <- F1_Score(y_pred = y_hat_insample3, y_true = pobre_train, positive = 1)
+f1_outsample3 <- F1_Score(y_pred = y_hat_outsample3, y_true =pobre_test, positive = 1)
+
+metricas_insample3 <- data.frame(Modelo = "Lasso", 
+                                 "Muestreo" = "SMOTE - Oversampling", 
+                                 "Evaluación" = "Dentro de muestra",
+                                 "Sensibility"= sen_insample3,
+                                 "Specificity" = spec_insample3,
+                                 "FPR" =fpr_insample3,
+                                 "Accuracy" = acc_insample3,
+                                 "Precision" = pre_insample3,
+                                 "Recall" = rec_insample3,
+                                 "F1" = f1_insample3, "RMSE"=rmse_insample3)
+
+metricas_outsample3 <- data.frame(Modelo = "Lasso", 
+                                  "Muestreo" = "SMOTE - Oversampling", 
+                                  "Evaluación" = "Fuera de muestra",
+                                  "Sensibility"= sen_outsample3,
+                                  "Specificity" = spec_outsample3,
+                                  "FPR" =fpr_outsample3,
+                                  "Accuracy" = acc_outsample3,
+                                  "Precision" = pre_outsample3,
+                                  "Recall" = rec_outsample3,
+                                  "F1" = f1_outsample3, "RMSE"=rmse_outsample3)
+
+
+metricas3 <- bind_rows(metricas_insample3, metricas_outsample3)
+metricas <- bind_rows(metricas2, metricas3)
+
+metricas %>%
+  kbl(digits = 2)  %>%
+  kable_styling(full_width = T)
+
+
+################################################################
+###################### Ridge  ##########################
+################################################################
+
+glmmod_ridge <- cv.glmnet(train_hogares2_X, train_hogares2_y, alpha = 0)
+
+probs_insample4 <- predict(glmmod_ridge, as.matrix(sub_train_hogares))
+rmse_insample4 <- sqrt(mean((sub_y_train$pobre - probs_insample4)^2))
+probs_insample4[probs_insample4 < sub_train_hogares$lp] <- 1
+probs_insample4[probs_insample4 > sub_train_hogares$lp] <- 0
+
+probs_outsample4 <- predict(glmmod_ridge, as.matrix(sub_test_hogares))
+rmse_outsample4 <- sqrt(mean((sub_y_test$pobre - probs_outsample4)^2))
+probs_outsample4[probs_outsample4 < sub_test_hogares$lp]<- 1
+probs_outsample4[probs_outsample4 > sub_test_hogares$lp] <- 0
+
+# Convertimos la probabilidad en una predicción
+y_hat_insample4 <- as.numeric(probs_insample4)
+y_hat_outsample4 <- as.numeric(probs_outsample4)
+
+y_hat_cm<-as.data.frame(y_hat_insample4)
+cm=confusionMatrix(data =as.factor(y_hat_cm$y_hat_insample4), reference = as.factor(pobre_train))
+
+sen_insample4<-as.numeric(cm$byClass[1][1])
+spec_insample4<-as.numeric(cm$byClass[2][1])
+fpr_insample4<-1-spec_insample4
+
+
+y_hat_cm<-as.data.frame(y_hat_outsample4)
+cm=confusionMatrix(data =as.factor(y_hat_cm$y_hat_outsample4), reference = as.factor(pobre_test))
+
+sen_outsample4<-as.numeric(cm$byClass[1][1])
+spec_outsample4<-as.numeric(cm$byClass[2][1])
+fpr_outsample4<-1-spec_outsample4
+
+
+acc_insample4 <- Accuracy(y_pred = y_hat_insample4, y_true = pobre_train)
+acc_outsample4 <- Accuracy(y_pred = y_hat_outsample4, y_true =pobre_test)
+
+pre_insample4 <- Precision(y_pred = y_hat_insample4, y_true = pobre_train, positive = 1)
+pre_outsample4 <- Precision(y_pred = y_hat_outsample4, y_true =pobre_test, positive = 1)
+
+rec_insample4 <- Recall(y_pred = y_hat_insample4, y_true = pobre_train, positive = 1)
+rec_outsample4 <- Recall(y_pred = y_hat_outsample4, y_true =pobre_test, positive = 1)
+
+f1_insample4 <- F1_Score(y_pred = y_hat_insample4, y_true = pobre_train, positive = 1)
+f1_outsample4 <- F1_Score(y_pred = y_hat_outsample4, y_true =pobre_test, positive = 1)
+
+metricas_insample4 <- data.frame(Modelo = "Ridge", 
+                                 "Muestreo" = "SMOTE - Oversampling", 
+                                 "Evaluación" = "Dentro de muestra",
+                                 "Sensibility"= sen_insample4,
+                                 "Specificity" = spec_insample4,
+                                 "FPR" =fpr_insample4,
+                                 "Accuracy" = acc_insample4,
+                                 "Precision" = pre_insample4,
+                                 "Recall" = rec_insample4,
+                                 "F1" = f1_insample4, "RMSE"=rmse_insample4)
+
+metricas_outsample4 <- data.frame(Modelo = "Ridge", 
+                                  "Muestreo" = "SMOTE - Oversampling", 
+                                  "Evaluación" = "Fuera de muestra",
+                                  "Sensibility"= sen_outsample4,
+                                  "Specificity" = spec_outsample4,
+                                  "FPR" =fpr_outsample4,
+                                  "Accuracy" = acc_outsample4,
+                                  "Precision" = pre_outsample4,
+                                  "Recall" = rec_outsample4,
+                                  "F1" = f1_outsample4, "RMSE"=rmse_outsample4)
+
+
+
+metricas4 <- bind_rows(metricas_insample4, metricas_outsample4)
+metricas <- bind_rows(metricas2, metricas3, metricas4)
+
+metricas %>%
+  kbl(digits = 2)  %>%
+  kable_styling(full_width = T)
+
+
+##################################################
+################# RANDOM FOREST
+#################################################
+install.packages("randomForest")
+library(randomForest)
+fiveStats <- function(...) c(twoClassSummary(...), defaultSummary(...))
+
+train_hogares2 <- as.data.frame(cbind(sub_train_hogares, sub_y_train))
+
+fitControl <- trainControl(
+  method = 'cv', 
+  summaryFunction = fiveStats,     # k-fold cross validation
+  number = 5,                      # number of folds
+  savePredictions = 'final',       # saves predictions for optimal tuning parameter
+  returnResamp = "all"
+) 
+
+mdl_rf_inner <- caret::train(as.data.frame(sub_train_hogares),train_hogares2$pobre, method = "ranger",
+                             preProcess = c("center", "scale"),
+                             ntrees = 1000, metric="RMSE")
+
+
+
+
+probs_insample6 <- predict(mdl_rf_inner, train_hogares2_X)
+probs_outsample6 <- predict(mdl_rf_inner, as.matrix(sub_test_hogares))
+
+
+
+# Convertimos la probabilidad en una predicción
+y_hat_insample6[probs_insample6 < sub_train_hogares$lp] <- 1
+y_hat_insample6[probs_insample6 > sub_train_hogares$lp] <- 0
+
+
+y_hat_outsample6[probs_outsample6 < sub_train_hogares$lp] <- 1
+y_hat_outsample6[probs_outsample6 > sub_train_hogares$lp] <- 0
+
+
+
+
+y_hat_cm<-as.data.frame(y_hat_insample6)
+cm=confusionMatrix(data =as.factor(y_hat_cm), reference = as.factor(pobre_train))
+
+rmse_insample6 <- sqrt(mean((sub_y_train$pobre - probs_insample6)^2))
+sen_insample6<-as.numeric(cm$byClass[1][1])
+spec_insample6<-as.numeric(cm$byClass[2][1])
+fpr_insample6<-1-spec_insample6
+
+y_hat_cm<-as.data.frame(y_hat_outsample6)
+cm=confusionMatrix(data =as.factor(y_hat_cm$y_hat_outsample6), reference = as.factor(pobre_test))
+
+rmse_outsample6 <- sqrt(mean((sub_y_train$pobre - probs_outsample6)^2))
+sen_outsample6<-as.numeric(cm$byClass[1][1])
+spec_outsample6<-as.numeric(cm$byClass[2][1])
+fpr_outsample6<-1-spec_outsample6
+
+acc_insample6 <- Accuracy(y_pred = y_hat_insample6, y_true = pobre_train)
+acc_outsample6 <- Accuracy(y_pred = y_hat_outsample6, y_true = pobre_test)
+
+pre_insample6 <- Precision(y_pred = y_hat_insample6, y_true = pobre_train, positive = 1)
+pre_outsample6 <- Precision(y_pred = y_hat_outsample6, y_true = pobre_test, positive = 1)
+
+rec_insample6 <- Recall(y_pred = y_hat_insample6, y_true = pobre_train, positive = 1)
+rec_outsample6 <- Recall(y_pred = y_hat_outsample6, y_true = pobre_test, positive = 1)
+
+f1_insample6 <- F1_Score(y_pred = y_hat_insample6, y_true = pobre_train, positive = 1)
+f1_outsample6 <- F1_Score(y_pred = y_hat_outsample6, y_true = pobre_test, positive = 1)
+
+metricas_insample6 <- data.frame(Modelo = "RF", 
+                                 "Muestreo" = "SMOTE - Oversampling", 
+                                 "Evaluación" = "Dentro de muestra",
+                                 "Sensibility"= sen_insample6,
+                                 "Specificity" = spec_insample6,
+                                 "FPR" =fpr_insample6,
+                                 "Accuracy" = acc_insample6,
+                                 "Precision" = pre_insample6,
+                                 "Recall" = rec_insample6,
+                                 "F1" = f1_insample6,"RMSE"=rmse_insample6)
+
+metricas_outsample6 <- data.frame(Modelo = "RF", 
+                                  "Muestreo" = "SMOTE - Oversampling", 
+                                  "Evaluación" = "Fuera de muestra",
+                                  "Sensibility"= sen_outsample6,
+                                  "Specificity" = spec_outsample6,
+                                  "FPR" =fpr_outsample6,
+                                  "Accuracy" = acc_outsample6,
+                                  "Precision" = pre_outsample6,
+                                  "Recall" = rec_outsample6,
+                                  "F1" = f1_outsample6,"RMSE"=rmse_outsample6)
+
+metricas6 <- bind_rows(metricas_insample6, metricas_outsample6)
+metricas <- bind_rows(metricas2, metricas3, metricas4 ,metricas6)
+
+metricas %>%
+  kbl(digits = 2)  %>%
+  kable_styling(full_width = T)
+
+###ROC con modelo final y matriz de confusion
+
+library("ROC") 
+
+pred <- prediction(y_hat_cm$y_hat_outsample6, train_hogares2$pobre)
+roc_ROCR <- performance(pred,"tpr","fpr")
+plot(roc_ROCR, main = "ROC curve", colorize = T)
+abline(a = 0, b = 1)
+
+#Modelo Test: Predicción Final y Absoluta
+colnames_hogares_cs <- c("lp", "p6040","p6800","valor_arriendo","p5000","p5090","nper","orden","p6210básicasecundaria6o9o", "p6210media10o13o", "p6210superiorouniversitaria", "p6430obrerooempleadodelgobierno","p6430empleadodoméstico","p6430trabajadorporcuentapropia", "p6430patrónoempleador","p6430trabajadorfamiliarsinremune", "p6430trabajadorsinremuneraciónen", "p6430jornaleroopeón","p6240buscandotrabajo","p6240estudiando","p6240oficiosdelhogar","p6240incapacitadopermanenteparat", "p6240otraactividad") 
+test_hogares_final_X = test_hogares[,colnames_hogares_cs]
+test_hogares_final= data.frame(test_hogares_final_X)
+
+variables_continuas <- as.data.frame(subset(test_hogares_final, select = c("p6040","p6800","valor_arriendo","p5000","p5090","lp")))
+variables_continuas$p60402 <- (variables_continuas$p6040)^2
+
+variables_factor <- as.data.frame(subset(test_hogares_final, select = -c(p6040,p6800,valor_arriendo,p5000,p5090,lp)))
+
+
+test_hogares_final_continuas <- model.matrix( ~.  ^2 -1, data=variables_continuas)
+test_hogares_final  <- cbind(test_hogares_final_continuas, variables_factor, test_hogares$id)
+
+
+modelo_final<-as.numeric(predict(model_rf,test_hogares_final))-1
+
+modelo_final2<-predict(mdl_rf_inner,test_hogares_final)
+
+
+
+
+# Convertimos la probabilidad en una predicción
+modelo_final2[modelo_final2 < test_hogares_final$lp] <- 1
+modelo_final2[modelo_final2 > test_hogares_final$lp] <- 0
+
+
+
+submission_template<-data.frame("id"=test_hogares$id, 
+                                "classification_model" = modelo_final,
+                                "regression_model"=modelo_final2)
+
+write.csv(submission_template, file="submission_template.csv",row.names = FALSE)
+
+
 ######### ESTADÍSTICAS DESCRIPTIVAS ##########
 ## Aquí se sacan las tablas que usamos en la descripción de los datos en formato latex, histograma del ingreso y gráfico de waffle (Sobre la train y test originales)
 
