@@ -1,74 +1,61 @@
-## sancocho de paquetes 
-install.packages("vtable")
-library(vtable)
-## sancocho de paquetes 
+########################## PROBLEM SET 2 BDML 2022-2 - PREDICCIÓN DE LA POBREZA ####################################
+## Daniel Lasso
+## Matteo Rozo
+## Gabriela Mejía
 
-# create notin operator
+
+######### Consideraciones ##############
+
+# Crear operador notin
 `%notin%` <- Negate(`%in%`)
 
-#### consideraciones 
+## En adelante es necesario cambiar el path de trabajo propio ##
 
-##############
-
-#### cambia el path de trabajo #######
-
-# Download packages if not available
+# Descargar paquetes si no se encuentran disponibles
 pckgs <- c("tidyverse", "data.table", "rlang", "readxl")
 if (any(pckgs %notin% rownames(installed.packages())==TRUE)){
   install.packages(pckgs, repos = c(CRAN = "http://cloud.r-project.org"))}
 install.packages("caret")
 
-
-# load packages
+# Descargar y cargar algunos paquetes
 invisible(sapply(pckgs, FUN = require, character.only = TRUE))
-
-#### estos son para otras cosas 
+install.packages("vtable")
+library(vtable)
 install.packages("here")
 install.packages("dplyr")
 install.packages("readxl")
-
 library(readxl)
 library(dplyr)  
 library(here)
 library(tidyr)
-
 library("caret")
 
-## leyendo los datos
+## Lectura de los datos (Cambio de path)
 
 train_hogares<-readRDS(("D:/noveno semestre/big data/BDML_ProblemSet2/data/train_hogares.Rds"))
 train_personas<-readRDS(("D:/noveno semestre/big data/BDML_ProblemSet2/data/train_personas.Rds"))
-
 test_hogares<-readRDS(("D:/noveno semestre/big data/BDML_ProblemSet2/data/test_hogares.Rds"))
 test_personas<-readRDS(("D:/noveno semestre/big data/BDML_ProblemSet2/data/test_personas.Rds"))
 
 #Directorios GM
 train_hogares<-readRDS(("/Users/gabrielamejia/Documents/GitHub/BDML_ProblemSet2/data/train_hogares.Rds"))
 train_personas<-readRDS(("/Users/gabrielamejia/Documents/GitHub/BDML_ProblemSet2/data/train_personas.Rds"))
-
 test_hogares<-readRDS(("/Users/gabrielamejia/Documents/GitHub/BDML_ProblemSet2/data/test_hogares.Rds"))
 test_personas<-readRDS(("/Users/gabrielamejia/Documents/GitHub/BDML_ProblemSet2/data/test_personas.Rds"))
 
-
-
-############ limpieza de base de entrenamiento  
-### limpiar la de personas
+################ DATA CLEANING ##################
 
 colnames_personas_test <- colnames(test_personas) 
 ingreso_personas = train_personas[,c("Ingtot")]
 train_personas= train_personas[,colnames_personas_test]
 train_personas=cbind(train_personas,ingreso_personas)
 train_personas= data.frame(train_personas)
-
-# extraer las varaibles que son relevantes para el objeto de estudio:
-# limpieza de las variables. 
-
-############# hay que cambiar que es haven ###############
+#### Data cleaning para la base train personas
+## Es necesario recodificar las  variables y su formato
 library(haven)
-
 train_personas = haven::as_factor(train_personas)
 
-# import the codebook 
+# Importamos los códigos de las variables categóricas (Cambiar path)
 key <- read_excel("D:/noveno semestre/big data/BDML_ProblemSet2/data/recode_vals.xlsx") %>%
   select(c("var_name"),contains("value"))
 
@@ -78,48 +65,20 @@ key <- read_excel("/Users/gabrielamejia/Documents/GitHub/BDML_ProblemSet2/data/r
 
 variables_cambio <- key[["var_name"]]
 
-
-## Functions
-
-## split and unlist character values (separated by commas) into a numeric vector with n elements
-
-#vulist <- function(x){suppressWarnings(as.numeric(unlist(strsplit(as.character(x), split = ",")))) }
-
-## split and unlist string (separated by commas) into a character vector with n elements
-
-#vlulist <- function(x){suppressWarnings(unlist(strsplit(as.character(x), split = ",")))}
-
-## Option 5: recode values function (deframe) 
-# (rlang, tibble, and dplyr)
-
-#recode_the_vals <- function(x){	
-
-# x_name <- quo_name(enquo(x))
-# key.sub <- key %>% filter(var_name %in% x_name)
-#  label.keys <- tibble(values = vlulist(key.sub$values), labels = vlulist(key.sub$value.labels))
-#  recode(x, !!!(deframe(label.keys)))
-#}
-
-# recode values
-#train_personas %>% 
-#mutate(across(.cols = variables_cambio, ~ recode_the_vals(.x)))
-
-
-
-# tras hacer la recodificacion se seleccionan las variables mas relevantes:
+# Tras hacer la recodificacion se seleccionan las variables mas relevantes, y las variables que son consistentes a lo largo del test:
 X1=train_personas[,variables_cambio]
 X2= train_personas[,c("id","P6040","Orden","Clase","Depto","P6040","P6430","P6800","P6870","Pet","Oc","Des","Ina")]
 Ingtot= train_personas[,"Ingtot"]
 train_personas =cbind(Ingtot,X2,X1)
 train_personas= data.frame(train_personas)
 
-#### encontrando el numero de missings
+#### Encontrando el numero de missings
 
 # ver los missing values 
 is.na(train_personas)
 colSums(is.na(train_personas))
 
-## reemplazar categoricas 
+##reemplazar categoricas 
 
 variables_categoricas <- c("Depto")
 for (v in variables_categoricas) {
@@ -130,7 +89,7 @@ train_personas <- train_personas %>% mutate_at(vars("Ingtot"), ~replace_na(.,0))
 train_personas <- train_personas %>% mutate_at(vars("P6800"), ~replace_na(.,0))
 
 library(forcats)
-# reemplazando estas variables por no 
+# Reemplazando estas variables por "No" 
 
 asignar_no_col <- c("P6510", "P6545", "P6580", "P6590", "P6610","P7040","P7090","P7110", "P7495", "P7510s3", "P7510s5", "P6920")
 variables_factor <- names(select_if(train_personas, is.factor))
@@ -141,7 +100,7 @@ for (v in asignar_no_col) {
   train_personas[, v] <- fct_explicit_na(train_personas[, v], "No")
 }
 
-# reemplazando por no sabe
+# Reemplazando por "No sabe"
 
 train_personas$P6090 <- fct_explicit_na(train_personas$P6090, "No sabe, no informa")
 train_personas$Ina <- fct_explicit_na(train_personas$Ina, "No info")
@@ -154,79 +113,38 @@ train_personas$P6210 <- fct_explicit_na(train_personas$P6210, "No sabe,no inform
 train_personas$P6240 <- fct_explicit_na(train_personas$P6240, "Otra actividad")
 train_personas$logIngtot <- log(train_personas$Ingtot+1)
 
-######################## dummys 
+# Creamos las dummys de las variables factores a partir de model matrix
 
 variables_factor <- names(select_if(train_personas, is.factor))
 train_personas_dummy <- train_personas[,variables_factor]
-
-
 train_personas_dummy <- model.matrix( ~.-1, data=train_personas_dummy)
 
-## matriz del modelo. 
+## Matriz del modelo
 
 train_personas_dummy <- as.data.frame(train_personas_dummy)
-
-
 variables_numeric <- names(select_if(train_personas, is.numeric))
 variables_character <- names(select_if(train_personas, is.character))
-
 train_personas_id <- train_personas[,variables_character]
 train_personas_num <- train_personas[,variables_numeric]
-
-
 train_personas <- cbind(train_personas_num, train_personas_dummy, train_personas_id )
 
-########## limpiar test personas
+#### Data cleaning para la base test personas - Este código se repite de la sección inmediatamente anterior, 
+#por lo que lo incluimos todo de corrido sin comentarios. Para mayor detalle referirse a la sección anterior
 
 test_personas = haven::as_factor(test_personas)
 
-# import the codebook 
 key <- read_excel("D:/noveno semestre/big data/BDML_ProblemSet2/data/recode_vals.xlsx") %>%
   select(c("var_name"),contains("value")) 
 
 variables_cambio <- key[["var_name"]]
 
-
-## Functions
-
-## split and unlist character values (separated by commas) into a numeric vector with n elements
-
-#vulist <- function(x){suppressWarnings(as.numeric(unlist(strsplit(as.character(x), split = ",")))) }
-
-## split and unlist string (separated by commas) into a character vector with n elements
-
-#vlulist <- function(x){suppressWarnings(unlist(strsplit(as.character(x), split = ",")))}
-
-## Option 5: recode values function (deframe) 
-# (rlang, tibble, and dplyr)
-
-#recode_the_vals <- function(x){	
-
-# x_name <- quo_name(enquo(x))
-# key.sub <- key %>% filter(var_name %in% x_name)
-#  label.keys <- tibble(values = vlulist(key.sub$values), labels = vlulist(key.sub$value.labels))
-#  recode(x, !!!(deframe(label.keys)))
-#}
-
-# recode values
-#test_personas %>% 
-#mutate(across(.cols = variables_cambio, ~ recode_the_vals(.x)))
-
-
-
-# tras hacer la recodificacion se seleccionan las variables mas relevantes:
 X1=test_personas[,variables_cambio]
 X2= test_personas[,c("id","P6040","Orden","Clase","Depto","P6040","P6430","P6800","P6870","Pet","Oc","Des","Ina")]
 test_personas =cbind(X2,X1)
 test_personas= data.frame(test_personas)
 
-#### encontrando el numero de missings
-
-# ver los missing values 
 is.na(test_personas)
 colSums(is.na(test_personas))
-
-## reemplazar categoricas 
 
 variables_categoricas <- c("Depto")
 for (v in variables_categoricas) {
@@ -234,8 +152,6 @@ for (v in variables_categoricas) {
 }
 
 test_personas <- test_personas %>% mutate_at(vars("P6800"), ~replace_na(.,0))
-
-# reemplazando estas variables por no 
 
 asignar_no_col <- c("P6510", "P6545", "P6580", "P6590", "P6610","P7040","P7090","P7110", "P7495", "P7510s3", "P7510s5", "P6920")
 variables_factor <- names(select_if(test_personas, is.factor))
@@ -245,8 +161,6 @@ for (v in asignar_no_col) {
   print(v)
   test_personas[, v] <- fct_explicit_na(test_personas[, v], "No")
 }
-
-# reemplazando por no sabe
 
 test_personas$P6090 <- fct_explicit_na(test_personas$P6090, "No sabe, no informa")
 test_personas$Ina <- fct_explicit_na(test_personas$Ina, "No info")
@@ -258,18 +172,12 @@ test_personas$P6430 <- fct_explicit_na(test_personas$P6430, "No evidencia")
 test_personas$P6210 <- fct_explicit_na(test_personas$P6210, "No sabe,no informa")
 test_personas$P6240 <- fct_explicit_na(test_personas$P6240, "Otra actividad")
 
-######################## dummys 
-
 variables_factor <- names(select_if(test_personas, is.factor))
 test_personas_dummy <- test_personas[,variables_factor]
 
-
 test_personas_dummy <- model.matrix( ~.-1, data=test_personas_dummy)
 
-## matriz del modelo. 
-
 test_personas_dummy <- as.data.frame(test_personas_dummy)
-
 
 variables_numeric <- names(select_if(test_personas, is.numeric))
 variables_character <- names(select_if(test_personas, is.character))
@@ -277,96 +185,69 @@ variables_character <- names(select_if(test_personas, is.character))
 test_personas_id <- test_personas[,variables_character]
 test_personas_num <- test_personas[,variables_numeric]
 
-
 test_personas <- cbind(test_personas_num, test_personas_dummy, test_personas_id )
 
 
-########## merge de base de hogar con personas #################
-# colapsar las variables entre los adultos en el hogar #
+########## DATA MERGE #################
+## Aquí el objetivo es agregar a nivel de hogar algunas variables de los individuos para poder tener más información de los hogare y clasificarlos de manera correcta
+## Este procedimiento, por facilidad y cuestiones de timepo decidiimos realizarlo en Stata
 
-#### vamos a colapsar la base en stata ###### 
-
-
+### Merge de train
+#Lo pasamos a stata, a través de un CSV, la transformación se encuentra en el dofile "Merge_hogares_stata"
+#Cambiar el path
 write.csv(train_hogares, file = "D:/noveno semestre/big data/BDML_ProblemSet2/data/train_hogares.csv")
 write.csv(train_personas, file = "D:/noveno semestre/big data/BDML_ProblemSet2/data/train_personas.csv")
 
-
-##### volvemos al R. 
-
-
+## Con la base exportada de stata volvemos al script de R
+## Cambiar el path
 train_hogares<-read_csv(("D:/noveno semestre/big data/BDML_ProblemSet2/data/train_hogares_final.csv"))
 
-
-#### revisar missing values 
+## Revisar missing values 
 colSums(is.na(train_hogares))
 
-### crear una variable del valor del arriendo. 
-
+## Crear una variable del valor del arriendo, pues creemos que es buen proxy de calidad y estrato de la vivienda
+## Lo cual jos puede acercar a la medición del ingreso de la unidad de gasto
 train_hogares <- train_hogares %>% mutate_at(vars("p5130","p5140"), ~replace_na(.,0))
 train_hogares$valor_arriendo = rowSums(train_hogares[,c("p5130", "p5140")])
 train_hogares <- subset(train_hogares, select = -c(p5130,p5140,p5100, clase, dominio, indigente, npobres, nindigentes, fex_c, depto, fex_dpto) )
 colSums(is.na(train_hogares))
 
+### Merge de test-  Este código se repite de la sección inmediatamente anterior, 
+#por lo que lo incluimos todo de corrido sin comentarios. Para mayor detalle referirse a la sección anterior
 
-##################################################
-########### HACIENDO LO MISMO PARA TEST################
-##############################################
-
-########## merge de base de hogar con personas #################
-# colapsar las variables entre los adultos en el hogar #
-
-#### vamos a colapsar la base en stata ###### 
-
+#Cambiar el path
 
 write.csv(test_hogares, file = "D:/noveno semestre/big data/BDML_ProblemSet2/data/test_hogares.csv")
 write.csv(test_personas, file = "D:/noveno semestre/big data/BDML_ProblemSet2/data/test_personas.csv")
-
-
-##### volvemos al R. 
-
-
 test_hogares<-read_csv(("D:/noveno semestre/big data/BDML_ProblemSet2/data/test_hogares_final.csv"))
-
-
-#### revisar missing values 
 colSums(is.na(test_hogares))
-
-### crear una variable del valor del arriendo. 
-
 test_hogares <- test_hogares %>% mutate_at(vars("p5130","p5140"), ~replace_na(.,0))
 test_hogares$valor_arriendo = rowSums(test_hogares[,c("p5130", "p5140")])
 test_hogares <- subset(test_hogares, select = -c(p5130,p5140,p5100, clase, dominio, fex_c, depto, fex_dpto) )
-
 colSums(is.na(test_hogares))
 
-
-##############################################
-####################### revisar que tengan la misma estructura 
-#############################################
-
+#Ahora debemos revisar que las bases tenga a misma estructura y cheqeuar que haya quedado correctamente el merge
 setdiff(colnames(train_hogares), colnames(test_hogares))
 head(train_hogares$v71)
-
 skimr::skim(train_hogares$depto11)
-##############################
-############## NO tienen las mismas columnas entonces toca arreglarlo
-###################################
 
+## No tienen las mismas columnas entonces toca arreglarlo
 
 train_hogares_X <- subset(train_hogares, select = -c(ingtotug, ingtotugarr, ingpcug ,depto11 ,v71, p60401, li, npersug) )
 test_hogares <- subset(test_hogares, select = -c(v68,p60401, li, npersug) )
 
 setdiff(colnames(train_hogares_X), colnames(test_hogares))
 
+################ DATA MATCHING PARA EL TESTEO ##################
+## La evaluación de este problem set se dará según la capacidad de predicción de los modelos dentro de una muestra
+## de test específica. Por esta razón, ya ante el desconocimiento que tenemos de los valores de pobreza de
+## dentro de la base que tenemos de testeo, es necesario crear nuestro propio testeo a través de una estrategia de 
+## Propensity Score Matching que permita a partir de observables construir un subtest y un subtrain que nos de 
+## unos valores cercanos al test verdadero sobre el cual se realizará la evaluación
 
-########################################################
-############### Crear un subconjunto de train para testeo
-#######################################################
-
-#Punto a
 set.seed(1)
 
-#use 70% of dataset as training set and 30% as test set
+# Usamos 70% de los datos como un training set y 30% como test set
 sample <- sample(c(TRUE, FALSE), nrow(train_hogares_X), replace=TRUE, prob=c(0.7,0.3))
 sub_train_hogares  <- train_hogares_X[sample, ]
 sub_test_hogares   <- train_hogares_X[!sample, ]
@@ -376,11 +257,8 @@ sub_y_test <- subset(sub_test_hogares, select = c(pobre) )
 sub_train_hogares <- subset(sub_train_hogares, select = -c(pobre, id) )
 sub_test_hogares <- subset(sub_test_hogares, select = -c(pobre, id) )
 
-
-########################################################
-############### modelos 
-#######################################################
-
+## Para realizar el matching, podemos realizar distintos modelos para obtener la mejor predicción sobre 
+## si la observación pertenece a train o test
 
 # Implementamos oversampling
 library(pacman)
@@ -396,18 +274,15 @@ train_hogares2 <- recipe(pobre ~ .,data = cbind(sub_train_hogares, sub_y_train))
 
 prop.table(table(train_hogares2$pobre))
 
-#########################################################################
-########################### LASSO PROBABILISTICO ########################
-#########################################################################
+
+##LASSO PROBABILISTICO 
 
 library(glmnet)
 library(kableExtra)
 
-
 train_hogares2_X <- subset(train_hogares2, select = -c(pobre) )
 train_hogares2_X <- as.matrix(train_hogares2_X)
 train_hogares2_y <- train_hogares2[,"pobre"]
-
 
 glmmod <- cv.glmnet(train_hogares2_X, as.factor(train_hogares2_y$pobre), alpha = 1, family="binomial")
 
@@ -422,7 +297,6 @@ probs_outsample2[probs_outsample2 > 1] <- 1
 # Convertimos la probabilidad en una predicción
 y_hat_insample2 <- as.numeric(probs_insample2 > 0.5)
 y_hat_outsample2 <- as.numeric(probs_outsample2 > 0.5)
-
 
 acc_insample2 <- Accuracy(y_pred = y_hat_insample2, y_true = train_hogares2$pobre)
 acc_outsample2 <- Accuracy(y_pred = y_hat_outsample2, y_true = sub_y_test)
@@ -459,7 +333,8 @@ metricas <- bind_rows(metricas2)
 metricas %>%
   kbl(digits = 2)  %>%
   kable_styling(full_width = T)
-####################################################################
+
+
 # Implementamos undersampling
 train_hogares3 <- recipe(pobre ~ .,data = cbind(sub_train_hogares, sub_y_train)) %>%
   themis::step_downsample(pobre) %>%
@@ -467,9 +342,6 @@ train_hogares3 <- recipe(pobre ~ .,data = cbind(sub_train_hogares, sub_y_train))
   bake(new_data = NULL)
 
 prop.table(table(train_hogares3$pobre))
-
-
-
 
 train_hogares3_X <- subset(train_hogares3, select = -c(pobre) )
 train_hogares3_X <- as.matrix(train_hogares3_X)
@@ -528,9 +400,7 @@ metricas %>%
   kbl(digits = 2)  %>%
   kable_styling(full_width = T)
 
-################################################################
-###################### Ridge  ##########################
-################################################################
+## RIDGE
 
 glmmod_ridge <- cv.glmnet(train_hogares2_X, as.factor(train_hogares2_y$pobre), alpha = 0, family="binomial")
 
@@ -545,7 +415,6 @@ probs_outsample4[probs_outsample4 > 1] <- 1
 # Convertimos la probabilidad en una predicción
 y_hat_insample4 <- as.numeric(probs_insample4 > 0.5)
 y_hat_outsample4 <- as.numeric(probs_outsample4 > 0.5)
-
 
 acc_insample4 <- Accuracy(y_pred = y_hat_insample4, y_true = train_hogares2$pobre)
 acc_outsample4 <- Accuracy(y_pred = y_hat_outsample4, y_true = sub_y_test)
@@ -583,8 +452,7 @@ metricas %>%
   kbl(digits = 2)  %>%
   kable_styling(full_width = T)
 
-##############################
-################ undersampling
+## Undersampling
 train_hogares3$pobre <- as.numeric(train_hogares3$pobre)
 probs_insample5 <- predict(glmmod_ridge, train_hogares3_X)
 probs_insample5[probs_insample5 < 0] <- 0
@@ -634,11 +502,8 @@ metricas %>%
   kbl(digits = 2)  %>%
   kable_styling(full_width = T)
 
+## Random Forest 
 
-
-################################################################
-###################### Random Forest  ##########################
-################################################################
 install.packages("randomForest")
 library(randomForest)
 fiveStats <- function(...) c(twoClassSummary(...), defaultSummary(...))
@@ -665,8 +530,6 @@ varImpPlot(model_rf, scale=TRUE)
 
 probs_insample6 <- predict(model_rf, train_hogares2_X)
 probs_outsample6 <- predict(model_rf, as.matrix(sub_test_hogares))
-
-
 
 # Convertimos la probabilidad en una predicción
 y_hat_insample6 <- as.numeric(probs_insample6) - 1
@@ -709,7 +572,7 @@ metricas %>%
   kbl(digits = 2)  %>%
   kable_styling(full_width = T)
 
-#################################################################### PSCORE
+## PSCORE
 
 test_hogares2<-subset(test_hogares,select=-c(id))
 train_hogares4<-subset(train_hogares2,select=-c(pobre))
@@ -739,9 +602,8 @@ train_hogares2sc<-cbind(train_hogares2,sc_total_export)
 train_hogares2sc<-train_hogares2sc[train_hogares2sc$Predicho %in% c('No'),]
 write.csv(train_hogares2sc,file="train_hogares_sc.csv")
 
-######################################
-####### Estadisticas descriptivas#####
-#####################################
+######### ESTADÍSTICAS DESCRIPTIVAS ##########
+## Aquí se sacan las tablas que usamos en la descripción de los datos en formato latex, histograma del ingreso y gráfico de waffle (Sobre la train y test originales)
 
 st(train_personas, out='latex')
 st(test_personas, out='latex')
@@ -767,8 +629,6 @@ library(waffle)
 
 
 # Gráfico de waffle
-
-
 test <- c(`No Pobre`= 131936, `Pobre`= 33024)
 waffle(test/10000, rows=2, size=0.8, title="Hogares pobres", 
        xlab="1 cuadrado = 10 000 personas",colors = c(RColorBrewer::brewer.pal(3, "Set2")[1:2]))
