@@ -18,20 +18,10 @@ y 'test_personas.Rds', correspondientes a las bases de dato de entrenamiento y t
 
  ## Code Files 
  
- En el archivo Scrapping.R, se pueden encontrar 4 grandes secciones, correspondientes a cada punto del Problem Set 1 Big Data y Machine Learning for Applied Economics, los cuales son:
- - Data Scrapping and Data Cleaning
+El archivo Taller2.R, donde encontrará 4 grandes secciones:
+
+ - Data Merging and Data Cleaning
  
- Consiste en los procesos de limpieza y selección de las variables de la base scrappeado del GEIH del año 2018. Así mismo, se incluyen una serie de gráficos y tablas descriptivas de las mismas.
+ Consiste en los procesos de unión de las bases de hogares y personas, la selección de variables que serán usadas para la evaluación, y la construcción de otras variables relevantes que agregan características de personas a nivel hogar para una predicción precisa. 
  
- - Age-earnings profiles
- 
- Tiene como objetivo ser una primera aproximación hacia los modelos de predicción de ingresos a través de la estimación de un modelo de regresión linear a partir del polinomio de segundo grado de la edad. También, se exploran las implicaciones de los resultados encontrados en términos de sus medidas de ajuste y se discute el peak age, siendo aquella edad que se alcanza un pico de ganancias según la literatura económica.
- 
- - The gender earnings GAP
-  
-  Estudia las desigualdades en ingresos que pueden existir entre hombres y mujeres como una variable explicativa de la predicción de los ingresos en base a ciertas características de los individuos y en términos generales. En razón de ello, se implementan varias especificaciones de modelos lineales que buscan estudiar este fenómeno y cómo entenderlo aporta a la predicción de los ingresos. Como en la sección anterior, todavía se hace una discusión sobre el peak ages.
- 
- - Predicting earnings
-  
-  Prueba el poder predictivo de cada uno de los modelos usando como función de pérdida la raíz de los errores medios al cuadrado aplicando diversas técnicaas de validación, con lo cual se buscará encontrar y analizar aquellos con mayor poder predictivo.
  
