@@ -18,10 +18,19 @@ y 'test_personas.Rds', correspondientes a las bases de dato de entrenamiento y t
 
  ## Code Files 
  
-El archivo Taller2.R, donde encontrará 4 grandes secciones:
+El archivo Taller2.R, donde encontrará XX grandes secciones:
 
- - Data Merging and Data Cleaning
+ - Data Cleaning
  
- Consiste en los procesos de unión de las bases de hogares y personas, la selección de variables que serán usadas para la evaluación, y la construcción de otras variables relevantes que agregan características de personas a nivel hogar para una predicción precisa. 
+ Consiste en los procesos de unión de las bases de hogares y personas, la selección de variables que serán usadas para la evaluación, la recodificiación de factores. 
+
+ - Data Merge
+
+ Consiste en el merge (durante el cual se migra a stata y cuyo código puede encontrarse en 'Merge_hogares_stata.do') entre las bases de personas y hogares tanto en train como en test. El objetivo del merge es poder agregar a nivel de hogares características observables de los individuos que nos puedan ayudar a generar predictores para la clasificación de los hogares en situación de pobreza.
+
+ - Data Matching
+ Consiste en el Matching de la base de testeo original con un subset de nuestro train original en el cual podamos a partir de observables intentar acercarnos a cuáles son los hogares del train original y podemos a partir de modelos de predicción realizar un propensity score matching. El objetivo es poder ajustar nuestros modelos a estos hogares de testeo, atentiendo a los incentivos de la evaluación de este Problem Set. 
+
+- Estadísticas Descriptivas
  
  
