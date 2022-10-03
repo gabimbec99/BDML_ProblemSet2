@@ -18,7 +18,7 @@ y 'test_personas.Rds', correspondientes a las bases de dato de entrenamiento y t
 
  ## Code Files 
  
-El archivo Taller2.R, donde encontrará XX grandes secciones:
+El archivo Taller2.R, donde encontrará 4 grandes secciones:
 
  - Data Cleaning
  
@@ -32,5 +32,6 @@ El archivo Taller2.R, donde encontrará XX grandes secciones:
  Consiste en el Matching de la base de testeo original con un subset de nuestro train original en el cual podamos a partir de observables intentar acercarnos a cuáles son los hogares del train original y podemos a partir de modelos de predicción realizar un propensity score matching. El objetivo es poder ajustar nuestros modelos a estos hogares de testeo, atentiendo a los incentivos de la evaluación de este Problem Set. 
 
 - Estadísticas Descriptivas
+- Modelos finales
  
  
